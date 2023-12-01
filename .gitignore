@@ -1,0 +1,10 @@
+bert-it-1
+data
+datasets
+tmp
+venv
+.DS_Store
+.ipynb_checkpoints
+checkpoints
+logs
+
