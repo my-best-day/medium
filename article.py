@@ -15,8 +15,21 @@ from torch.optim import Adam
 
 PREPARE_DATA = False
 MAX_LEN = 32 # 64
+EVAL_ITERS = 50
 device = 'cuda' if torch.cuda.is_available() else 'cpu'
 
+# todo:
+# + see how batches are used
+# - add randomization in the sampling 
+#   - I'm not sure how ipmortant this is, there is nothing special in the order of the sentences
+# - add estimate_loss
+# - see about how to move lines/data to device. gpt.py does it differently than here
+#
+# - optimize network structure folowing some of Andrej Karpathy's suggestions: norm before activation, etc
+# - add early stopping
+# - train / validation / set ?
+# - try running on Aleph with larger network, batch, MAX_LEN, etc.
+# - see if we can see the tokens in the output
 
 ### loading all data into memory
 corpus_movie_lines = './datasets/movie_lines.txt'
@@ -112,7 +125,7 @@ class EarlyStopping:
             'loss': loss,
             'counter': self.counter
         }
-        torch.save(state,  self.path + '/' + 'checkpoint.pth')
+        torch.save(state,  self.path + 'checkpoints/' + 'checkpoint.pth')
        
 
 class BERTDataset(Dataset):
@@ -128,7 +141,7 @@ class BERTDataset(Dataset):
 
     def __getitem__(self, index):
 
-        # Step 1: get random sentence pair, either negative or positive (saved as is_next_label)
+        # Step 1: get random sentence pair
         line = lines[index] 
 
         # Step 2: replace random words in sentence with mask / random words
@@ -210,7 +223,6 @@ class PositionalEmbedding(torch.nn.Module):
                 pe[pos, i + 1] = math.cos(pos / (10000 ** ((2 * (i + 1))/d_model)))
 
         # include the batch size
-        # self.pe = pe.unsqueeze(0)   
         self.register_buffer('pe', pe.unsqueeze(0))
 
     def forward(self, x):
@@ -377,23 +389,6 @@ class BERT(torch.nn.Module):
             x = encoder.forward(x, mask)
         return x
 
-class NextSentencePrediction(torch.nn.Module):
-    """
-    2-class classification model : is_next, is_not_next
-    """
-
-    def __init__(self, hidden):
-        """
-        :param hidden: BERT model output size
-        """
-        super().__init__()
-        self.linear = torch.nn.Linear(hidden, 2)
-        self.softmax = torch.nn.LogSoftmax(dim=-1)
-
-    def forward(self, x):
-        # use only the first token which is the [CLS]
-        return self.softmax(self.linear(x[:, 0]))
-
 class MaskedLanguageModel(torch.nn.Module):
     """
     predicting origin token from masked input sequence
@@ -415,7 +410,6 @@ class MaskedLanguageModel(torch.nn.Module):
 class BERTLM(torch.nn.Module):
     """
     BERT Language Model
-    Next Sentence Prediction Model + Masked Language Model
     """
 
     def __init__(self, bert: BERT, vocab_size):
@@ -464,20 +458,9 @@ class ScheduledOptim():
         for param_group in self._optimizer.param_groups:
             param_group['lr'] = lr
 
-
 class BERTTrainer:
-    def __init__(
-        self, 
-        model, 
-        train_dataloader, 
-        test_dataloader=None, 
-        lr= 1e-4,
-        weight_decay=0.01,
-        betas=(0.9, 0.999),
-        warmup_steps=10000,
-        log_freq=10,
-        device=device
-        ):
+    def __init__(self, model, train_dataloader, test_dataloader=None, lr= 1e-4,weight_decay=0.01,
+        betas=(0.9, 0.999), warmup_steps=10000, log_freq=10, device=device):
 
         self.device = device
         print(f"Device: {self.device} *** *** *** *** ***")
@@ -503,13 +486,36 @@ class BERTTrainer:
     def test(self, epoch):
         self.iteration(epoch, self.test_data, train=False)
 
+    @torch.no_grad()
+    def estimate_loss(self, data_loader):
+        out = {}
+        self.model.eval()
+        data_size = len(data_loader)
+        dataset = data_loader.dataset
+        batch_size = data_loader.batch_size
+        # for split in ['train', 'val']:
+        for split in ['train']:
+            losses = torch.zeros(EVAL_ITERS)
+            for k in range(EVAL_ITERS):
+                # data = data_loader.dataset[random.randint(0, data_size-1)]
+                ix = torch.randint(data_size, (batch_size,))
+                # createa a tensor with the items pointed by ix
+                data = torch.stack([dataset[i]["bert_input"] for i in ix])
+                label = torch.stack([dataset[i]["bert_label"] for i in ix])
+                mask_lm_output = self.model(data)
+                loss = self.criterion(mask_lm_output.transpose(1, 2), label)
+                losses[k] = loss.item()
+            out[split] = losses.mean()
+        self.model.train()
+        return out
+    
     def iteration(self, epoch, data_loader, train=True):
         
         avg_loss = 0.0
         total_correct = 0
         total_element = 0
 
-        early_stopping = EarlyStopping(self.model, './', patience=7, verbose=True, delta=0.01)
+        # early_stopping = EarlyStopping(self.model, './', patience=7, verbose=True, delta=0.01)
 
         mode = "train" if train else "test"
 
@@ -521,21 +527,29 @@ class BERTTrainer:
             bar_format="{l_bar}{r_bar}"
         )
 
+
+        eval_interval = 200
+        losses = {'train': 1e9}
         for i, data in data_iter:
+            log_flag = i % eval_interval == 0 or i == len(data_iter) - 1
+            if log_flag:
+                losses = self.estimate_loss(data_loader)
+                # print(f"step {i}: train loss: {losses['train']}, val loss: {losses['val']}")
+                # print(f"step {i}: train loss: {losses['train']}")
+
             # 0. batch_data will be sent into the device(GPU or cpu)
             data = {key: value.to(self.device) for key, value in data.items()}
 
-            # 1. forward the next_sentence_prediction and masked_lm model
             mask_lm_output = self.model(data["bert_input"])
 
             # 2-2. NLLLoss of predicting masked token word
             # transpose to (m, vocab_size, seq_len) vs (m, seq_len)
             # criterion(mask_lm_output.view(-1, mask_lm_output.size(-1)), data["bert_label"].view(-1))
             loss = self.criterion(mask_lm_output.transpose(1, 2), data["bert_label"])
-            early_stopping(loss)
-            if early_stopping.stop_flag:
-                print("Early Stopping *** *** *** *** *** *** ***")
-                break
+            # early_stopping(loss)
+            # if early_stopping.stop_flag:
+            #     print("Early Stopping *** *** *** *** *** *** ***")
+            #     break
 
             # 3. backward and optimization only in train
             if train:
@@ -543,17 +557,18 @@ class BERTTrainer:
                 loss.backward()
                 self.optim_schedule.step_and_update_lr()
 
-            # next sentence prediction accuracy
             avg_loss += loss.item()
 
             post_fix = {
                 "epoch": epoch,
                 "iter": i,
                 "avg_loss": avg_loss / (i + 1),
-                "loss": loss.item()
+                "loss": loss.item(),
+                "estimated": losses['train'].item()
             }
 
-            if i % self.log_freq == 0:
+            # if i % self.log_freq == 0:
+            if log_flag:
                 data_iter.write(str(post_fix))
         print(
             f"EP{epoch}, {mode}: \
