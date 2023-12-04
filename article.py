@@ -26,7 +26,7 @@ DROPOUT = 0.1
 LEARNING_RATE = 1e-4
 
 
-PROFILE = "bee"
+PROFILE = "xxxbee"
 if PROFILE == "bee":
     PREPARE_DATA = False
     MAX_LEN = 32 
@@ -34,15 +34,16 @@ if PROFILE == "bee":
     EVAL_INTERVAL = 200
     EVAL_ITERS = 20
     D_MODEL = 192
-    HEADS = 2
+    HEADS = 4
 else:
     PREPARE_DATA = False
     MAX_LEN = 64 # 64
     BATCH_SIZE = 64
     EVAL_INTERVAL = 200
     EVAL_ITERS = 20
-    D_MODEL = 192 * 2 # 768
-    HEADS = 6 # 12
+    D_MODEL = 768
+    N_LAYER = 4
+    HEADS = 12
 
 device = 'cuda' if torch.cuda.is_available() else 'cpu'
 
@@ -132,7 +133,6 @@ class EarlyStopping:
         self.stop_flag = False
 
     def __call__(self, loss):
-        print(f"EarlyStopping: {loss} {self.best_loss} {self.counter} {self.patience}")
         if self.best_loss is None:
             self.best_loss = loss
         elif loss >= self.best_loss + self.delta:
@@ -142,13 +142,13 @@ class EarlyStopping:
                 print(f"Early Stopping, loss doesn't improves. Current: {loss}, Best: {self.best_loss}")
                 self.stop_flag = True
         elif loss < self.best_loss - self.delta:
-            if self.verbose:
-                print(f'Loss decreased {self.best_loss} --> {loss}. Saving model ...')
             self.best_loss = loss
             self.counter = 0
             self.save_checkpoint(loss)
 
     def save_checkpoint(self, loss):
+        if self.verbose:
+            print(f'Loss decreased {self.best_loss} --> {loss}. Saving model ...')
         state = {
             'model': self.model.state_dict(),
             'loss': loss,
@@ -560,7 +560,7 @@ class BERTTrainer:
     def iteration(self, epoch, data_loader, train=True):        
         avg_loss = 0.0
 
-        early_stopping = EarlyStopping(self.model, './', patience=4, verbose=True, delta=0.01)
+        # early_stopping = EarlyStopping(self.model, './', patience=7, verbose=True, delta=0.01)
 
         mode = "train" if train else "test"
 
@@ -578,10 +578,6 @@ class BERTTrainer:
             log_flag = i % eval_interval == 0 or i == len(data_iter) - 1
             if log_flag:
                 losses = self.estimate_loss(data_loader)
-                early_stopping(losses["train"].item())
-                if early_stopping.stop_flag:
-                    print("Early Stopping *** *** *** *** *** *** ***")
-                    break
 
             # 0. batch_data will be sent into the device(GPU or cpu)
             data = {key: value.to(self.device) for key, value in data.items()}
@@ -591,6 +587,10 @@ class BERTTrainer:
             # 2-2. NLLLoss of predicting masked token word
             # transpose to (m, vocab_size, seq_len) vs (m, seq_len)
             loss = self.criterion(mask_lm_output.transpose(1, 2), data["bert_label"])
+            # early_stopping(loss)
+            # if early_stopping.stop_flag:
+            #     print("Early Stopping *** *** *** *** *** *** ***")
+            #     break
 
             # 3. backward and optimization only in train
             if train:
