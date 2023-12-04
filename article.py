@@ -12,10 +12,38 @@ import math
 import torch.nn.functional as F
 import numpy as np
 from torch.optim import Adam
+import time
 
 PREPARE_DATA = False
-MAX_LEN = 32 # 64
+MAX_LEN = 64 # 64
+BATCH_SIZE = 64
+EVAL_INTERVAL = 200
 EVAL_ITERS = 50
+D_MODEL = 768
+N_LAYER = 2
+HEADS = 12
+DROPOUT = 0.1
+LEARNING_RATE = 1e-4
+
+
+PROFILE = "bee"
+if PROFILE == "bee":
+    PREPARE_DATA = False
+    MAX_LEN = 32 
+    BATCH_SIZE = 32
+    EVAL_INTERVAL = 200
+    EVAL_ITERS = 50
+    D_MODEL = 192
+    HEADS = 6
+else:
+    PREPARE_DATA = False
+    MAX_LEN = 64 # 64
+    BATCH_SIZE = 64
+    EVAL_INTERVAL = 200
+    EVAL_ITERS = 50
+    D_MODEL = 768
+    HEADS = 12
+
 device = 'cuda' if torch.cuda.is_available() else 'cpu'
 
 # todo:
@@ -351,7 +379,6 @@ class BERT(torch.nn.Module):
     BERT model : Bidirectional Encoder Representations from Transformers.
     """
 
-    # def __init__(self, vocab_size, d_model=768, n_layers=12, heads=12, dropout=0.1):
     def __init__(self, vocab_size, d_model, n_layers, heads, dropout):
         """
         :param vocab_size: vocab_size of total words
@@ -360,6 +387,7 @@ class BERT(torch.nn.Module):
         :param attn_heads: number of attention heads
         :param dropout: dropout rate
         """
+        print(f"BERT: vocab_size: {vocab_size}, d_model: {d_model}, n_layers: {n_layers}, heads: {heads}, dropout: {dropout}")  
 
         super().__init__()
         self.d_model = d_model
@@ -459,13 +487,14 @@ class ScheduledOptim():
             param_group['lr'] = lr
 
 class BERTTrainer:
-    def __init__(self, model, train_dataloader, test_dataloader=None, lr= 1e-4,weight_decay=0.01,
+    def __init__(self, model, train_dataloader, eval_dataloader, test_dataloader=None, lr= LEARNING_RATE,weight_decay=0.01,
         betas=(0.9, 0.999), warmup_steps=10000, log_freq=10, device=device):
 
         self.device = device
         print(f"Device: {self.device} *** *** *** *** ***")
         self.model = model.to(device)
         self.train_data = train_dataloader
+        self.eval_data = eval_dataloader
         self.test_data = test_dataloader
 
         # Setting the Adam optimizer with hyper-param
@@ -488,6 +517,14 @@ class BERTTrainer:
 
     @torch.no_grad()
     def estimate_loss(self, data_loader):
+        count = 0
+        rand_time = 0.0
+        stack_time = 0.0
+        move_time = 0.0
+        forward_time = 0.0
+        loss_time = 0.0
+
+
         out = {}
         self.model.eval()
         data_size = len(data_loader)
@@ -496,17 +533,48 @@ class BERTTrainer:
         # for split in ['train', 'val']:
         for split in ['train']:
             losses = torch.zeros(EVAL_ITERS)
-            for k in range(EVAL_ITERS):
-                # data = data_loader.dataset[random.randint(0, data_size-1)]
-                ix = torch.randint(data_size, (batch_size,))
-                # createa a tensor with the items pointed by ix
-                data = torch.stack([dataset[i]["bert_input"] for i in ix])
-                label = torch.stack([dataset[i]["bert_label"] for i in ix])
+            # for k in range(EVAL_ITERS):
+            #     t0 = time.process_time()                
+            #     ix = torch.randint(data_size, (batch_size,))
+            #     t1 = time.process_time()
+            #     rand_time += t1 - t0
+            #     t0 = t1
+            #     # createa a tensor with the items pointed by ix
+            #     data = torch.stack([dataset[i]["bert_input"] for i in ix])
+            #     label = torch.stack([dataset[i]["bert_label"] for i in ix])
+            #     t1 = time.process_time()
+            #     stack_time += t1 - t0
+            #     t0 = t1
+        
+            for k, batch in enumerate(self.eval_data):
+                data = batch["bert_input"]
+                label = batch["bert_label"]
+                
+
+                # move to device
+                t0 = time.process_time()
+                data = data.to(self.device)
+                label = label.to(self.device)
+                t1 = time.process_time()
+                move_time += t1 - t0
+                t0 = t1
+
                 mask_lm_output = self.model(data)
+                t1 = time.process_time()
+                forward_time += t1 - t0
+                t0 = t1
+
                 loss = self.criterion(mask_lm_output.transpose(1, 2), label)
+                t1 = time.process_time()
+                loss_time += t1 - t0
+                t0 = t1
+
                 losses[k] = loss.item()
+                if k == EVAL_ITERS - 1:
+                    break
             out[split] = losses.mean()
         self.model.train()
+        print(f"rand: {rand_time}, stack: {stack_time}, move: {move_time}, forward: {forward_time}, loss: {loss_time}")
         return out
     
     def iteration(self, epoch, data_loader, train=True):
@@ -527,8 +595,7 @@ class BERTTrainer:
             bar_format="{l_bar}{r_bar}"
         )
 
-
-        eval_interval = 200
+        eval_interval = EVAL_INTERVAL
         losses = {'train': 1e9}
         for i, data in data_iter:
             log_flag = i % eval_interval == 0 or i == len(data_iter) - 1
@@ -582,18 +649,21 @@ train_data = BERTDataset(
    lines, seq_len=MAX_LEN, tokenizer=tokenizer)
 
 train_loader = DataLoader(
-   train_data, batch_size=32, shuffle=True, pin_memory=True)
+   train_data, batch_size=BATCH_SIZE, shuffle=True, pin_memory=True)
+
+eval_loader = DataLoader(
+    train_data, batch_size=BATCH_SIZE, shuffle=True, pin_memory=True)
 
 bert_model = BERT(
   vocab_size=len(tokenizer.vocab),
-  d_model=192, # 768,
-  n_layers=2,
-  heads=6, # 12,
-  dropout=0.1
+  d_model=D_MODEL, # 192, # 768,
+  n_layers=N_LAYER,
+  heads=HEADS, # 6, # 12,
+  dropout=DROPOUT
 )
 
 bert_lm = BERTLM(bert_model, len(tokenizer.vocab))
-bert_trainer = BERTTrainer(bert_lm, train_loader, device=device)
+bert_trainer = BERTTrainer(bert_lm, train_loader, eval_loader, device=device)
 epochs = 20
 
 for epoch in range(epochs):
