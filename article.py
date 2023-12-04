@@ -32,17 +32,17 @@ if PROFILE == "bee":
     MAX_LEN = 32 
     BATCH_SIZE = 32
     EVAL_INTERVAL = 200
-    EVAL_ITERS = 50
+    EVAL_ITERS = 20
     D_MODEL = 192
-    HEADS = 6
+    HEADS = 2
 else:
     PREPARE_DATA = False
     MAX_LEN = 64 # 64
     BATCH_SIZE = 64
     EVAL_INTERVAL = 200
-    EVAL_ITERS = 50
-    D_MODEL = 768
-    HEADS = 12
+    EVAL_ITERS = 20
+    D_MODEL = 192 * 2 # 768
+    HEADS = 6 # 12
 
 device = 'cuda' if torch.cuda.is_available() else 'cpu'
 
@@ -132,6 +132,7 @@ class EarlyStopping:
         self.stop_flag = False
 
     def __call__(self, loss):
+        print(f"EarlyStopping: {loss} {self.best_loss} {self.counter} {self.patience}")
         if self.best_loss is None:
             self.best_loss = loss
         elif loss >= self.best_loss + self.delta:
@@ -141,13 +142,13 @@ class EarlyStopping:
                 print(f"Early Stopping, loss doesn't improves. Current: {loss}, Best: {self.best_loss}")
                 self.stop_flag = True
         elif loss < self.best_loss - self.delta:
+            if self.verbose:
+                print(f'Loss decreased {self.best_loss} --> {loss}. Saving model ...')
             self.best_loss = loss
             self.counter = 0
             self.save_checkpoint(loss)
 
     def save_checkpoint(self, loss):
-        if self.verbose:
-            print(f'Loss decreased {self.best_loss} --> {loss}. Saving model ...')
         state = {
             'model': self.model.state_dict(),
             'loss': loss,
@@ -336,7 +337,9 @@ class MultiHeadedAttention(torch.nn.Module):
         context = context.permute(0, 2, 1, 3).contiguous().view(context.shape[0], -1, self.heads * self.d_k)
 
         # (batch_size, max_len, d_model)
-        return self.output_linear(context)
+        projected = self.output_linear(context)
+        out = self.dropout(projected)
+        return out
 
 class FeedForward(torch.nn.Module):
     "Implements FFN equation."
@@ -352,13 +355,15 @@ class FeedForward(torch.nn.Module):
     def forward(self, x):
         out = self.activation(self.fc1(x))
         out = self.fc2(self.dropout(out))
-        return out
+        return out    
+
 class EncoderLayer(torch.nn.Module):
     # def __init__(self, d_model=768, heads=12, feed_forward_hidden=768 * 4, dropout=0.1):
     def __init__(self, d_model, heads, feed_forward_hidden, dropout):
         super(EncoderLayer, self).__init__()
-        self.layernorm = torch.nn.LayerNorm(d_model)
+        self.layernorm1 = torch.nn.LayerNorm(d_model)
         self.self_multihead = MultiHeadedAttention(heads, d_model)
+        self.layernorm2 = torch.nn.LayerNorm(d_model)
         self.feed_forward = FeedForward(d_model, middle_dim=feed_forward_hidden)
         self.dropout = torch.nn.Dropout(dropout)
 
@@ -366,13 +371,20 @@ class EncoderLayer(torch.nn.Module):
         # embeddings: (batch_size, max_len, d_model)
         # encoder mask: (batch_size, 1, 1, max_len)
         # result: (batch_size, max_len, d_model)
-        interacted = self.dropout(self.self_multihead(embeddings, embeddings, embeddings, mask))
-        # residual layer
-        interacted = self.layernorm(interacted + embeddings)
-        # bottleneck
-        feed_forward_out = self.dropout(self.feed_forward(interacted))
-        encoded = self.layernorm(feed_forward_out + interacted)
-        return encoded
+
+        # 1. norm
+        normed1 = self.layernorm1(embeddings)
+        # 2. self attention
+        interacted = self.self_multihead(normed1, normed1, normed1, mask)
+        # 3. residual layer
+        residual1 = embeddings + interacted
+        # 4. norm
+        normed2 = self.layernorm2(residual1)
+        # 5. feed forward
+        feed_forward_out = self.feed_forward(normed2)
+        # 6. residual layer
+        residual2 = residual1 + feed_forward_out
+        return residual2
 
 class BERT(torch.nn.Module):
     """
@@ -429,10 +441,12 @@ class MaskedLanguageModel(torch.nn.Module):
         :param vocab_size: total vocab size
         """
         super().__init__()
+        self.normlayer = torch.nn.LayerNorm(hidden)
         self.linear = torch.nn.Linear(hidden, vocab_size)
         self.softmax = torch.nn.LogSoftmax(dim=-1)
 
     def forward(self, x):
+        x = self.normlayer(x)
         return self.softmax(self.linear(x))
 
 class BERTLM(torch.nn.Module):
@@ -517,73 +531,36 @@ class BERTTrainer:
 
     @torch.no_grad()
     def estimate_loss(self, data_loader):
-        count = 0
-        rand_time = 0.0
-        stack_time = 0.0
-        move_time = 0.0
-        forward_time = 0.0
-        loss_time = 0.0
-
-
+        t0 = time.process_time()
         out = {}
         self.model.eval()
-        data_size = len(data_loader)
-        dataset = data_loader.dataset
-        batch_size = data_loader.batch_size
         # for split in ['train', 'val']:
         for split in ['train']:
             losses = torch.zeros(EVAL_ITERS)
-            # for k in range(EVAL_ITERS):
-            #     t0 = time.process_time()                
-            #     ix = torch.randint(data_size, (batch_size,))
-            #     t1 = time.process_time()
-            #     rand_time += t1 - t0
-            #     t0 = t1
-            #     # createa a tensor with the items pointed by ix
-            #     data = torch.stack([dataset[i]["bert_input"] for i in ix])
-            #     label = torch.stack([dataset[i]["bert_label"] for i in ix])
-            #     t1 = time.process_time()
-            #     stack_time += t1 - t0
-            #     t0 = t1
-        
             for k, batch in enumerate(self.eval_data):
                 data = batch["bert_input"]
                 label = batch["bert_label"]
                 
-
                 # move to device
-                t0 = time.process_time()
                 data = data.to(self.device)
                 label = label.to(self.device)
-                t1 = time.process_time()
-                move_time += t1 - t0
-                t0 = t1
 
                 mask_lm_output = self.model(data)
-                t1 = time.process_time()
-                forward_time += t1 - t0
-                t0 = t1
-
                 loss = self.criterion(mask_lm_output.transpose(1, 2), label)
-                t1 = time.process_time()
-                loss_time += t1 - t0
-                t0 = t1
-
                 losses[k] = loss.item()
                 if k == EVAL_ITERS - 1:
                     break
             out[split] = losses.mean()
         self.model.train()
-        print(f"rand: {rand_time}, stack: {stack_time}, move: {move_time}, forward: {forward_time}, loss: {loss_time}")
+        t1 = time.process_time()
+        print(f"estimate_loss: {(t1 - t0):.3} secs")
         return out
-    
-    def iteration(self, epoch, data_loader, train=True):
-        
-        avg_loss = 0.0
-        total_correct = 0
-        total_element = 0
 
-        # early_stopping = EarlyStopping(self.model, './', patience=7, verbose=True, delta=0.01)
+
+    def iteration(self, epoch, data_loader, train=True):        
+        avg_loss = 0.0
+
+        early_stopping = EarlyStopping(self.model, './', patience=4, verbose=True, delta=0.01)
 
         mode = "train" if train else "test"
 
@@ -601,8 +578,10 @@ class BERTTrainer:
             log_flag = i % eval_interval == 0 or i == len(data_iter) - 1
             if log_flag:
                 losses = self.estimate_loss(data_loader)
-                # print(f"step {i}: train loss: {losses['train']}, val loss: {losses['val']}")
-                # print(f"step {i}: train loss: {losses['train']}")
+                early_stopping(losses["train"].item())
+                if early_stopping.stop_flag:
+                    print("Early Stopping *** *** *** *** *** *** ***")
+                    break
 
             # 0. batch_data will be sent into the device(GPU or cpu)
             data = {key: value.to(self.device) for key, value in data.items()}
@@ -611,12 +590,7 @@ class BERTTrainer:
 
             # 2-2. NLLLoss of predicting masked token word
             # transpose to (m, vocab_size, seq_len) vs (m, seq_len)
-            # criterion(mask_lm_output.view(-1, mask_lm_output.size(-1)), data["bert_label"].view(-1))
             loss = self.criterion(mask_lm_output.transpose(1, 2), data["bert_label"])
-            # early_stopping(loss)
-            # if early_stopping.stop_flag:
-            #     print("Early Stopping *** *** *** *** *** *** ***")
-            #     break
 
             # 3. backward and optimization only in train
             if train:
@@ -644,7 +618,6 @@ class BERTTrainer:
 
 
 '''test run'''
-
 train_data = BERTDataset(
    lines, seq_len=MAX_LEN, tokenizer=tokenizer)
 
