@@ -7,4 +7,5 @@ venv
 .ipynb_checkpoints
 checkpoints
 logs
+ignore
 
