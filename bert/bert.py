@@ -8,7 +8,7 @@ class BERT(torch.nn.Module):
     BERT model : Bidirectional Encoder Representations from Transformers.
     """
 
-    def __init__(self, vocab_size, d_model, n_layers, heads, dropout, max_len, device):
+    def __init__(self, vocab_size, d_model, n_layers, heads, dropout, max_len):
         """
         :param vocab_size: vocab_size of total words
         :param hidden: BERT model hidden size
@@ -28,7 +28,7 @@ class BERT(torch.nn.Module):
         self.feed_forward_hidden = d_model * 4
 
         # embedding for BERT, sum of positional, token embeddings
-        self.embedding = BERTEmbedding(vocab_size=vocab_size, embed_size=d_model, seq_len=self.max_len, dropout=dropout, device=device)
+        self.embedding = BERTEmbedding(vocab_size=vocab_size, embed_size=d_model, seq_len=self.max_len, dropout=dropout)
 
         # multi-layers transformer blocks, deep network
         self.encoder_blocks = torch.nn.ModuleList(

@@ -3,11 +3,11 @@ import torch
 
 class PositionalEmbedding(torch.nn.Module):
 
-    def __init__(self, d_model, max_len, device):
+    def __init__(self, d_model, max_len):
         super().__init__()
 
         # Compute the positional encodings once in log space.
-        pe = torch.zeros(max_len, d_model).float().to(device)
+        pe = torch.zeros(max_len, d_model).float()
         pe.require_grad = False
 
         for pos in range(max_len):   

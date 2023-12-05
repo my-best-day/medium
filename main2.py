@@ -22,7 +22,7 @@ HEADS = 12
 DROPOUT = 0.1
 LEARNING_RATE = 1e-4
 
-PROFILE = "bee"
+PROFILE = "xxbee"
 if PROFILE == "bee":
     PREPARE_DATA = False
     MAX_LEN = 16 # 32 
@@ -33,12 +33,12 @@ if PROFILE == "bee":
     HEADS = 4
 else:
     PREPARE_DATA = False
-    MAX_LEN = 64 # 64
+    MAX_LEN = 32 # 64
     BATCH_SIZE = 64
     EVAL_INTERVAL = 200
     EVAL_ITERS = 20
-    D_MODEL = 768
-    N_LAYER = 4
+    D_MODEL = 192 # 768
+    N_LAYER = 2
     HEADS = 12
 
 device = 'cuda' if torch.cuda.is_available() else 'cpu'
@@ -94,11 +94,11 @@ bert_model = BERT(
   n_layers=N_LAYER,
   heads=HEADS, # 6, # 12,
   dropout=DROPOUT,
-  max_len=MAX_LEN,
-  device=device
-)
+  max_len=MAX_LEN
+).to(device)
 
-bert_lm = BERTLM(bert_model, len(tokenizer.vocab))
+bert_lm = BERTLM(bert_model, len(tokenizer.vocab)).to(device)
+
 bert_trainer = BERTTrainer2(
     bert_lm, 
     train_data,
