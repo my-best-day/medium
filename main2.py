@@ -94,7 +94,8 @@ bert_model = BERT(
   n_layers=N_LAYER,
   heads=HEADS, # 6, # 12,
   dropout=DROPOUT,
-  max_len=MAX_LEN
+  max_len=MAX_LEN,
+  device=device
 )
 
 bert_lm = BERTLM(bert_model, len(tokenizer.vocab))

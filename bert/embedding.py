@@ -10,7 +10,7 @@ class BERTEmbedding(torch.nn.Module):
         sum of all these features are output of BERTEmbedding
     """
 
-    def __init__(self, vocab_size, embed_size, seq_len, dropout):
+    def __init__(self, vocab_size, embed_size, seq_len, dropout, device):
         """
         :param vocab_size: total vocab size
         :param embed_size: embedding size of token embedding
@@ -22,7 +22,7 @@ class BERTEmbedding(torch.nn.Module):
         # (m, seq_len) --> (m, seq_len, embed_size)
         # padding_idx is not updated during training, remains as fixed pad (0)
         self.token = torch.nn.Embedding(vocab_size, embed_size, padding_idx=0)
-        self.position = PositionalEmbedding(d_model=embed_size, max_len=seq_len)
+        self.position = PositionalEmbedding(d_model=embed_size, max_len=seq_len, device=device)
         self.dropout = torch.nn.Dropout(p=dropout)
        
     def forward(self, sequence):
