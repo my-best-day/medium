@@ -105,7 +105,7 @@ class BERTTrainer2:
     def save_checkpoint(self, epoch: int, index: int, loss: float):
         global_step = epoch * self.batch_count + index
         start_time = time.time()
-        name = f"bert_epoch{epoch}_iindex{index}_{datetime.datetime.utcnow().timestamp():.0f}.pt"
+        name = f"bert_epoch{epoch}_index{index}_{datetime.datetime.utcnow().timestamp():.0f}.pt"
         torch.save({
             'epoch': epoch,
             'model_state_dict': self.model.state_dict(),
