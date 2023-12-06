@@ -42,6 +42,9 @@ class BERTTrainer2:
         self.start_epoch = 0
         self.epoch = 0
 
+        # for p in self.model.parameters():
+        #     print(p, p.nelement())
+
         total_parameters = sum([p.nelement() for p in self.model.parameters()])
         print(f"Total Parameters: {total_parameters:,}")
 
