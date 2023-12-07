@@ -17,11 +17,13 @@ class BERTTrainer2:
                  batch_size: int,
                  learning_rate: float,
                  epochs: int,
-                 device: str = 'cpu' ):
+                 device: str = 'cpu',
+                 tokenizer=None):
         self.model = model
         self.print_every = print_every
         self.epochs = epochs
         self.device = device
+        self.tokenizer = tokenizer
 
         self.ds_size = len(dataset)
         self.batch_size = batch_size
@@ -54,6 +56,46 @@ class BERTTrainer2:
             loss = self.train_epoch(self.epoch)
             self.save_checkpoint(self.epoch, -1, loss)
 
+    def batched_debug(self, sentence, labels, mlm_out):
+        with torch.no_grad():
+            # sentence = sentence.clone()
+            # labels = labels.clone()
+            # mlm_out = mlm_out.clone()
+            B, T, V = mlm_out.shape
+            text = []
+            for b in range(B):
+                if any(element != 0 for element in labels[b]):
+                    english = self.debug(sentence[b], labels[b], mlm_out[b])
+                    text.append(english)
+                    if len(text) >= 4:
+                        break
+            return text
+
+    def convert_id_to_token(self, id):
+        token = self.tokenizer.convert_ids_to_tokens([id])[0]
+        return token
+    
+    def convert_tokens_to_string(self, tokens):
+        import re
+        text = self.tokenizer.convert_tokens_to_string(tokens)
+        cleaned_text = re.sub(r'\[.*?\]\s*', '', text)
+        return cleaned_text
+
+    def debug(self, sentence, labels, mlm_out):
+        english = []
+        for i, id in enumerate(sentence):
+            if id == self.tokenizer.mask_token_id:
+                predicted_id = mlm_out[i].argmax(axis=-1)
+                token = f"**{self.convert_id_to_token(predicted_id)}**"
+            else:
+                token = self.convert_id_to_token(id)
+            english.append(token)
+        english = self.convert_tokens_to_string(english)
+        sentence2 = map(lambda i: labels[i] if sentence[i] == self.tokenizer.mask_token_id else sentence[i], range(len(sentence)))
+        source = self.tokenizer.convert_ids_to_tokens(sentence2)
+        source = self.convert_tokens_to_string(source)
+        return f"{english}\n{source}"
+    
     def train_epoch(self, epoch):
         print(f"Begin epoch {epoch + 1}")
         
@@ -66,6 +108,11 @@ class BERTTrainer2:
             labels = labels.to(self.device)
 
             mlm_out = self.model(sentence)
+            if (i + 1) % self.print_every == 0:
+                print("=" * 70 )
+                predicted = self.batched_debug(sentence, labels, mlm_out)
+                print("\n".join(predicted[:4]))
+                print("=" * 70 )
             loss = self.criterion(mlm_out.transpose(1, 2), labels)
             accumulated_loss += loss
 

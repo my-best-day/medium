@@ -9,4 +9,5 @@ venv
 checkpoints
 logs
 ignore
-
+.env
+settings.json

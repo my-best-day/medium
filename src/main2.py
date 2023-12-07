@@ -22,7 +22,7 @@ HEADS = 12
 DROPOUT = 0.1
 LEARNING_RATE = 1e-4
 
-PROFILE = "xxbee"
+PROFILE = "bee"
 if PROFILE == "bee":
     PREPARE_DATA = False
     MAX_LEN = 16 # 32 
@@ -31,6 +31,7 @@ if PROFILE == "bee":
     EVAL_ITERS = 20
     D_MODEL = 48 # 96 # 192
     HEADS = 4
+    N_LAYER = 1
 else:
     PREPARE_DATA = False
     MAX_LEN = 32 # 64
@@ -104,10 +105,11 @@ bert_trainer = BERTTrainer2(
     train_data,
     log_dir=Path('./logs'),
     checkpoint_dir=Path('./checkpoints'),
-    print_every=100,
+    print_every=200,
     batch_size=BATCH_SIZE,
     learning_rate=LEARNING_RATE,
     epochs=20,
-    device=device)
+    device=device,
+    tokenizer=tokenizer)
 
 bert_trainer.train()
