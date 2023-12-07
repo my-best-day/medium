@@ -77,7 +77,7 @@ class BERTTrainer2:
             if id != 0:
                 predicted_id = mlm_out[i].argmax(axis=-1)
                 token = f"/{self.convert_id_to_token(predicted_id)}/"
-                print(f"{predicted_id} -> {token} : {mlm_out[i][:8]}")
+                print(f"{predicted_id} -> {token} : {mlm_out[i][14:20]}")
             else:
                 token = self.convert_id_to_token(sentence[i])
             english.append(token)

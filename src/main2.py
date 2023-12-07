@@ -20,9 +20,9 @@ D_MODEL = 768
 N_LAYER = 2
 HEADS = 12
 DROPOUT = 0.1
-LEARNING_RATE = 1e-5
+LEARNING_RATE = 1e-4
 
-PROFILE = "bee"
+PROFILE = "xxbee"
 if PROFILE == "bee":
     PREPARE_DATA = False
     MAX_LEN = 16 # 32 
@@ -34,12 +34,12 @@ if PROFILE == "bee":
     N_LAYER = 1
 else:
     PREPARE_DATA = False
-    MAX_LEN = 32 # 64
+    MAX_LEN = 64
     BATCH_SIZE = 64
     EVAL_INTERVAL = 200
     EVAL_ITERS = 20
-    D_MODEL = 192 # 768
-    N_LAYER = 2
+    D_MODEL = 768
+    N_LAYER = 4
     HEADS = 12
 
 device = 'cuda' if torch.cuda.is_available() else 'cpu'
