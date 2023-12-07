@@ -71,6 +71,22 @@ class BERTTrainer2:
                         break
             return text
 
+    def debug(self, sentence, labels, mlm_out):
+        english = []
+        for i, id in enumerate(labels):
+            if id != 0:
+                predicted_id = mlm_out[i].argmax(axis=-1)
+                token = f"/{self.convert_id_to_token(predicted_id)}/"
+                print(f"{predicted_id} -> {token} : {mlm_out[i][:8]}")
+            else:
+                token = self.convert_id_to_token(sentence[i])
+            english.append(token)
+        english = self.convert_tokens_to_string(english)
+        sentence2 = map(lambda i: labels[i] if sentence[i] == self.tokenizer.mask_token_id else sentence[i], range(len(sentence)))
+        source = self.tokenizer.convert_ids_to_tokens(sentence2)
+        source = self.convert_tokens_to_string(source)
+        return f"{english}\n{source}"
+    
     def convert_id_to_token(self, id):
         token = self.tokenizer.convert_ids_to_tokens([id])[0]
         return token
@@ -81,21 +97,6 @@ class BERTTrainer2:
         cleaned_text = re.sub(r'\[.*?\]\s*', '', text)
         return cleaned_text
 
-    def debug(self, sentence, labels, mlm_out):
-        english = []
-        for i, id in enumerate(sentence):
-            if id == self.tokenizer.mask_token_id:
-                predicted_id = mlm_out[i].argmax(axis=-1)
-                token = f"**{self.convert_id_to_token(predicted_id)}**"
-            else:
-                token = self.convert_id_to_token(id)
-            english.append(token)
-        english = self.convert_tokens_to_string(english)
-        sentence2 = map(lambda i: labels[i] if sentence[i] == self.tokenizer.mask_token_id else sentence[i], range(len(sentence)))
-        source = self.tokenizer.convert_ids_to_tokens(sentence2)
-        source = self.convert_tokens_to_string(source)
-        return f"{english}\n{source}"
-    
     def train_epoch(self, epoch):
         print(f"Begin epoch {epoch + 1}")
         

@@ -20,7 +20,7 @@ D_MODEL = 768
 N_LAYER = 2
 HEADS = 12
 DROPOUT = 0.1
-LEARNING_RATE = 1e-4
+LEARNING_RATE = 1e-5
 
 PROFILE = "bee"
 if PROFILE == "bee":
@@ -105,7 +105,7 @@ bert_trainer = BERTTrainer2(
     train_data,
     log_dir=Path('./logs'),
     checkpoint_dir=Path('./checkpoints'),
-    print_every=200,
+    print_every=100,
     batch_size=BATCH_SIZE,
     learning_rate=LEARNING_RATE,
     epochs=20,
