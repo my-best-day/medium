@@ -35,7 +35,7 @@ class BERTTrainer2:
         self.loader = DataLoader(dataset, batch_size, shuffle=True, pin_memory=True)
         self.criterion = torch.nn.NLLLoss(ignore_index=0).to(device)
         self.optimizer = torch.optim.Adam(model.parameters(), 
-                                          lr=learning_rate, betas=betas, weight_decay=weight_decay)
+                                          lr=learning_rate, betas=betas) # , weight_decay=weight_decay)
         # self.optimizer_schedule = ScheduledOptim(self.optimizer, model.d_model, n_warmup_steps=10000)
 
         self.writer = SummaryWriter(str(log_dir))
@@ -77,7 +77,7 @@ class BERTTrainer2:
             if id != 0:
                 predicted_id = mlm_out[i].argmax(axis=-1)
                 token = f"/{self.convert_id_to_token(predicted_id)}/"
-                print(f"{predicted_id} -> {token} : {mlm_out[i][14:20]}")
+                print(f"{predicted_id} -> {token} : {describe(mlm_out[i])}")
             else:
                 token = self.convert_id_to_token(sentence[i])
             english.append(token)
@@ -110,6 +110,10 @@ class BERTTrainer2:
 
             mlm_out = self.model(sentence)
             if (i + 1) % self.print_every == 0:
+                import numpy as np
+                np.set_printoptions(formatter={'float': '{:0.2f}'.format})
+                print(mlm_out.detach().cpu().numpy()[0,0,:])
+
                 print("=" * 70 )
                 predicted = self.batched_debug(sentence, labels, mlm_out)
                 print("\n".join(predicted[:4]))
@@ -184,3 +188,32 @@ class BERTTrainer2:
         self.start_epoch = self.epoch
         print("Model is restored.")
         print("=" * 70)
+
+
+def describe_tensor(tensor):
+    """
+    Returns descriptive statistics for a 1D PyTorch tensor.
+
+    :param tensor: A 1D PyTorch tensor.
+    :return: A dictionary with min, max, mean, standard deviation, 25th percentile, and 75th percentile.
+    """
+    if tensor.dim() != 1:
+        raise ValueError("Tensor must be 1-dimensional.")
+
+    desc_stats = {
+        "min": tensor.min().item(),
+        "max": tensor.max().item(),
+        "mean": tensor.mean().item(),
+        "stddev": tensor.std().item(),
+        "25%": torch.quantile(tensor, 0.25).item(),
+        "75%": torch.quantile(tensor, 0.75).item()
+    }
+
+    return desc_stats
+
+def describe(tensor):
+    """
+    print the descriptive statistics for a 1D PyTorch tensor as one line of text.
+    """
+    stats = describe_tensor(tensor)
+    print(" | ".join([f"{k}: {v:.2f}" for k, v in stats.items()]))
