@@ -20,9 +20,9 @@ D_MODEL = 768
 N_LAYER = 2
 HEADS = 12
 DROPOUT = 0.1
-LEARNING_RATE = 1e-5
+LEARNING_RATE = 5e-4
 
-PROFILE = "xxbee"
+PROFILE = "bee"
 if PROFILE == "bee":
     PREPARE_DATA = False
     MAX_LEN = 16 # 32 

@@ -67,7 +67,7 @@ class BERTTrainer2:
                 if any(element != 0 for element in labels[b]):
                     english = self.debug(sentence[b], labels[b], mlm_out[b])
                     text.append(english)
-                    if len(text) >= 4:
+                    if len(text) >= 10:
                         break
             return text
 
@@ -77,7 +77,7 @@ class BERTTrainer2:
             if id != 0:
                 predicted_id = mlm_out[i].argmax(axis=-1)
                 token = f"/{self.convert_id_to_token(predicted_id)}/"
-                print(f"{predicted_id} -> {token} : {describe(mlm_out[i])}")
+                # print(f"{predicted_id} -> {token} : {describe(mlm_out[i])}")
             else:
                 token = self.convert_id_to_token(sentence[i])
             english.append(token)
@@ -116,7 +116,7 @@ class BERTTrainer2:
 
                 print("=" * 70 )
                 predicted = self.batched_debug(sentence, labels, mlm_out)
-                print("\n".join(predicted[:4]))
+                print("\n".join(predicted[:10]))
                 print("=" * 70 )
             loss = self.criterion(mlm_out.transpose(1, 2), labels)
             accumulated_loss += loss
@@ -129,6 +129,8 @@ class BERTTrainer2:
                 elapsed = time.time() - start_time
                 summary = self.training_summary(elapsed, (i+1), accumulated_loss)
                 print(summary)
+
+                # self.save_checkpoint(self.epoch, i, loss)
 
                 accumulated_loss = 0
 
@@ -160,7 +162,7 @@ class BERTTrainer2:
     def save_checkpoint(self, epoch: int, index: int, loss: float):
         global_step = epoch * self.batch_count + index
         start_time = time.time()
-        name = f"bert_epoch{epoch}_index{index}_{datetime.datetime.utcnow().timestamp():.0f}.pt"
+        name = f"bert_epoch{epoch}_index{global_step}_{datetime.datetime.utcnow().timestamp():.0f}.pt"
         torch.save({
             'epoch': epoch,
             'model_state_dict': self.model.state_dict(),
