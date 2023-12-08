@@ -7,7 +7,7 @@ import torch.nn.functional as F
 from torch.optim import Adam
 
 from bert.bert import BERT
-from bert.trainer2 import BERTTrainer2
+from bert.trainer import BERTTrainer
 from bert.bertlm import BERTLM
 from bert.dataset import BERTDataset
 
@@ -100,7 +100,7 @@ bert_model = BERT(
 
 bert_lm = BERTLM(bert_model, len(tokenizer.vocab)).to(device)
 
-bert_trainer = BERTTrainer2(
+bert_trainer = BERTTrainer(
     bert_lm, 
     train_data,
     log_dir=Path('./logs'),

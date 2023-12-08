@@ -7,7 +7,7 @@ import torch.nn.functional as F
 from torch.optim import Adam
 
 from bert.bert import BERT
-from bert.trainer2 import BERTTrainer2
+from bert.trainer import BERTTrainer
 from bert.bertlm import BERTLM
 from bert.dataset import BERTDataset
 
@@ -108,7 +108,7 @@ if torch.cuda.is_available():
     bert_lm = bert_lm.to(device)
 
 
-bert_trainer = BERTTrainer2(
+bert_trainer = BERTTrainer(
     bert_lm, 
     train_data,
     log_dir=Path('./logs'),
