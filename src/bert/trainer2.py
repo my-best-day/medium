@@ -7,6 +7,8 @@ from bert.dataset import BERTDataset
 from torch.utils.data import DataLoader
 from torch.utils.tensorboard import SummaryWriter
 
+from mtimer import MTimer
+
 class BERTTrainer2:
     def __init__(self,
                  model: BERT,
@@ -99,33 +101,53 @@ class BERTTrainer2:
 
     def train_epoch(self, epoch):
         print(f"Begin epoch {epoch + 1}")
-        
+
         start_time = time.time()
         accumulated_loss = 0
-        for i, data in enumerate(self.loader):
+        mtimer = MTimer()
+        mtimer.start('loader')
+        for i, data in enumerate(self.loader):            
+            mtimer.end('loader')
+
+            mtimer.start('to device')
             sentence, labels = data['bert_input'], data['bert_label']
 
             sentence = sentence.to(self.device)
             labels = labels.to(self.device)
+            mtimer.end('to device')
 
+            mtimer.start('model')
             mlm_out = self.model(sentence)
+            mtimer.end('model')
+
             if (i + 1) % self.print_every == 0:
+                mtimer.start('debug')
                 import numpy as np
-                np.set_printoptions(formatter={'float': '{:0.2f}'.format})
-                print(mlm_out.detach().cpu().numpy()[0,0,:])
+                # np.set_printoptions(formatter={'float': '{:0.2f}'.format})
+                # print(mlm_out.detach().cpu().numpy()[0,0,:])
 
                 print("=" * 70 )
                 predicted = self.batched_debug(sentence, labels, mlm_out)
                 print("\n".join(predicted[:10]))
                 print("=" * 70 )
+                mtimer.end('debug')
+
+            mtimer.start('loss')    
             loss = self.criterion(mlm_out.transpose(1, 2), labels)
             accumulated_loss += loss
+            mtimer.end('loss')
 
+            mtimer.start('backward')
             self.optimizer.zero_grad()
             loss.backward()
-            self.optimizer.step()
+            mtimer.end('backward')
 
+            mtimer.start('step')
+            self.optimizer.step()
+            mtimer.end('step')
+            
             if (i + 1) % self.print_every == 0:
+                mtimer.start('summary')
                 elapsed = time.time() - start_time
                 summary = self.training_summary(elapsed, (i+1), accumulated_loss)
                 print(summary)
@@ -133,7 +155,11 @@ class BERTTrainer2:
                 # self.save_checkpoint(self.epoch, i, loss)
 
                 accumulated_loss = 0
-
+                mtimer.end('summary')
+                mtimer.dump()
+            mtimer.start('loader')
+            
+        mtimer.dump()
         return loss
 
     def training_summary(self, elsapsed, index, accumulated_loss):

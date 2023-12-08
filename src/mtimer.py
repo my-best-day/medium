@@ -4,6 +4,7 @@ class MTimer:
     def __init__(self):
         self.records = {}
 
+    @staticmethod
     def _time():
         return time.process_time()
 
