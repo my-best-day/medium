@@ -1,124 +1,247 @@
 import time
-import tqdm
 import torch
-from torch.optim import Adam
+import datetime
+from pathlib import Path
+from bert.bert import BERT
+from bert.dataset import BERTDataset
+from torch.utils.data import DataLoader
+from torch.utils.tensorboard import SummaryWriter
 
-from bert.scheduled_optim import ScheduledOptim
+from mtimer import MTimer
 
-class BERTTrainer:
-    def __init__(self, model, train_dataloader, eval_dataloader, test_dataloader, lr, weight_decay=0.01,
-        betas=(0.9, 0.999), warmup_steps=10000, log_freq=10, device='cpu', eval_interval=200, eval_iters=50):
-
+class BERTTrainer2:
+    def __init__(self,
+                 model: BERT,
+                 dataset: BERTDataset,
+                 log_dir: Path,
+                 checkpoint_dir: Path,
+                 print_every: int,
+                 batch_size: int,
+                 learning_rate: float,
+                 epochs: int,
+                 device: str = 'cpu',
+                 tokenizer=None):
+        self.model = model
+        self.print_every = print_every
+        self.epochs = epochs
         self.device = device
-        print(f"Device: {self.device} *** *** *** *** ***")
-        self.model = model.to(device)
-        self.train_data = train_dataloader
-        self.eval_data = eval_dataloader
-        self.test_data = test_dataloader
+        self.tokenizer = tokenizer
 
-        # Setting the Adam optimizer with hyper-param
-        self.optim = Adam(self.model.parameters(), lr=lr, betas=betas, weight_decay=weight_decay)
-        self.optim_schedule = ScheduledOptim(
-            self.optim, self.model.bert.d_model, n_warmup_steps=warmup_steps
-            )
+        self.ds_size = len(dataset)
+        self.batch_size = batch_size
+        self.batch_count = self.ds_size // batch_size
 
-        # Using Negative Log Likelihood Loss function for predicting the masked_token
-        self.criterion = torch.nn.NLLLoss(ignore_index=0)
-        self.log_freq = log_freq
-        self.eval_interval = eval_interval
-        self.eval_iters = eval_iters
+        betas = (0.9, 0.999)
+        weight_decay = 0.015
+
+        self.loader = DataLoader(dataset, batch_size, shuffle=True, pin_memory=True)
+        self.criterion = torch.nn.NLLLoss(ignore_index=0).to(device)
+        self.optimizer = torch.optim.Adam(model.parameters(), 
+                                          lr=learning_rate, betas=betas) # , weight_decay=weight_decay)
+        # self.optimizer_schedule = ScheduledOptim(self.optimizer, model.d_model, n_warmup_steps=10000)
+
+        self.writer = SummaryWriter(str(log_dir))
+        self.checkpoint_dir = checkpoint_dir
+
+        self.start_epoch = 0
+        self.epoch = 0
+
+        # for p in self.model.parameters():
+        #     print(p, p.nelement())
 
         total_parameters = sum([p.nelement() for p in self.model.parameters()])
         print(f"Total Parameters: {total_parameters:,}")
+
+
+    def train(self):
+        for self.epoch in range(self.start_epoch, self.epochs):
+            loss = self.train_epoch(self.epoch)
+            self.save_checkpoint(self.epoch, -1, loss)
+
+    def batched_debug(self, sentence, labels, mlm_out):
+        with torch.no_grad():
+            # sentence = sentence.clone()
+            # labels = labels.clone()
+            # mlm_out = mlm_out.clone()
+            B, T, V = mlm_out.shape
+            text = []
+            for b in range(B):
+                if any(element != 0 for element in labels[b]):
+                    english = self.debug(sentence[b], labels[b], mlm_out[b])
+                    text.append(english)
+                    if len(text) >= 10:
+                        break
+            return text
+
+    def debug(self, sentence, labels, mlm_out):
+        english = []
+        for i, id in enumerate(labels):
+            if id != 0:
+                predicted_id = mlm_out[i].argmax(axis=-1)
+                token = f"/{self.convert_id_to_token(predicted_id)}/"
+                # print(f"{predicted_id} -> {token} : {describe(mlm_out[i])}")
+            else:
+                token = self.convert_id_to_token(sentence[i])
+            english.append(token)
+        english = self.convert_tokens_to_string(english)
+        sentence2 = map(lambda i: labels[i] if sentence[i] == self.tokenizer.mask_token_id else sentence[i], range(len(sentence)))
+        source = self.tokenizer.convert_ids_to_tokens(sentence2)
+        source = self.convert_tokens_to_string(source)
+        return f"{english}\n{source}"
     
-    def train(self, epoch):
-        self.iteration(epoch, self.train_data)
+    def convert_id_to_token(self, id):
+        token = self.tokenizer.convert_ids_to_tokens([id])[0]
+        return token
+    
+    def convert_tokens_to_string(self, tokens):
+        import re
+        text = self.tokenizer.convert_tokens_to_string(tokens)
+        cleaned_text = re.sub(r'\[.*?\]\s*', '', text)
+        return cleaned_text
 
-    def test(self, epoch):
-        self.iteration(epoch, self.test_data, train=False)
+    def train_epoch(self, epoch):
+        print(f"Begin epoch {epoch + 1}")
 
-    @torch.no_grad()
-    def estimate_loss(self, data_loader):
-        t0 = time.process_time()
-        out = {}
-        self.model.eval()
-        # for split in ['train', 'val']:
-        for split in ['train']:
-            losses = torch.zeros(self.eval_iters)
-            for k, batch in enumerate(self.eval_data):
-                data = batch["bert_input"]
-                label = batch["bert_label"]
-                
-                # move to device
-                data = data.to(self.device)
-                label = label.to(self.device)
+        start_time = time.time()
+        accumulated_loss = 0
+        mtimer = MTimer()
+        mtimer.start('loader')
+        for i, data in enumerate(self.loader):            
+            mtimer.end('loader')
 
-                mask_lm_output = self.model(data)
-                loss = self.criterion(mask_lm_output.transpose(1, 2), label)
-                losses[k] = loss.item()
-                if k == self.eval_iters - 1:
-                    break
-            out[split] = losses.mean()
-        self.model.train()
-        t1 = time.process_time()
-        print(f"estimate_loss: {(t1 - t0):.3} secs")
-        return out
+            mtimer.start('to device')
+            sentence, labels = data['bert_input'], data['bert_label']
+
+            sentence = sentence.to(self.device)
+            labels = labels.to(self.device)
+            mtimer.end('to device')
+
+            mtimer.start('model')
+            mlm_out = self.model(sentence)
+            mtimer.end('model')
+
+            if (i + 1) % self.print_every == 0:
+                mtimer.start('debug')
+                import numpy as np
+                # np.set_printoptions(formatter={'float': '{:0.2f}'.format})
+                # print(mlm_out.detach().cpu().numpy()[0,0,:])
+
+                print("=" * 70 )
+                predicted = self.batched_debug(sentence, labels, mlm_out)
+                print("\n".join(predicted[:10]))
+                print("=" * 70 )
+                mtimer.end('debug')
+
+            mtimer.start('loss')    
+            loss = self.criterion(mlm_out.transpose(1, 2), labels)
+            accumulated_loss += loss
+            mtimer.end('loss')
+
+            mtimer.start('backward')
+            self.optimizer.zero_grad()
+            loss.backward()
+            mtimer.end('backward')
+
+            mtimer.start('step')
+            self.optimizer.step()
+            mtimer.end('step')
+            
+            if (i + 1) % self.print_every == 0:
+                mtimer.start('summary')
+                elapsed = time.time() - start_time
+                summary = self.training_summary(elapsed, (i+1), accumulated_loss)
+                print(summary)
+
+                # self.save_checkpoint(self.epoch, i, loss)
+
+                accumulated_loss = 0
+                mtimer.end('summary')
+                mtimer.dump()
+            mtimer.start('loader')
+            
+        mtimer.dump()
+        return loss
+
+    def training_summary(self, elsapsed, index, accumulated_loss):
+        passed = index / self.batch_count
+        global_step = self.epoch * self.batch_count + index
+        mlm_loss = accumulated_loss / self.print_every
+        result = " | ".join([
+            time.strftime('%H:%M:%S', time.gmtime(elsapsed)),
+            f"(r:{self.estimate_remaining_time(passed, elsapsed)})",
+            f"Epocn {self.epoch + 1}",
+            f"{index} / {self.batch_count} ({passed:6.2%})",
+            f"MLM loss: {mlm_loss:6.2f}",
+        ])
+        self.writer.add_scalar("MLM loss", mlm_loss, global_step=global_step)
+        return result
+
+    @staticmethod
+    def estimate_remaining_time(passed: float, elapsed: float):
+        if passed <= 0:
+            return "00:00:00"
+        remaining = elapsed / passed - elapsed
+        formatted = time.strftime('%H:%M:%S', time.gmtime(remaining))
+        return formatted
 
 
-    def iteration(self, epoch, data_loader, train=True):        
-        avg_loss = 0.0
+    def save_checkpoint(self, epoch: int, index: int, loss: float):
+        global_step = epoch * self.batch_count + index
+        start_time = time.time()
+        name = f"bert_epoch{epoch}_index{global_step}_{datetime.datetime.utcnow().timestamp():.0f}.pt"
+        torch.save({
+            'epoch': epoch,
+            'model_state_dict': self.model.state_dict(),
+            'optimizer_state_dict': self.optimizer.state_dict(),
+            'loss': loss
+        }, self.checkpoint_dir / name)
 
-        # early_stopping = EarlyStopping(self.model, './', patience=7, verbose=True, delta=0.01)
+        text = "\n".join([
+            "",
+            "=" * 70,
+            f"Model saved as '{name}' for {time.time() - start_time:.2f} secs",
+            "=" * 70,
+            ""
+        ])
+        print(text)
 
-        mode = "train" if train else "test"
 
-        # progress bar
-        data_iter = tqdm.tqdm(
-            enumerate(data_loader),
-            desc="EP_%s:%d" % (mode, epoch),
-            total=len(data_loader),
-            bar_format="{l_bar}{r_bar}"
-        )
+    def load_checkpoint(self, path: Path):
+        print("=" * 70)
+        print(f"Restoring model {path}")
+        checkpoint = torch.load(path)
+        self.epoch = checkpoint['epoch']
+        self.model.load_state_dict(checkpoint['model_state_dict'])
+        self.optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
+        self.start_epoch = self.epoch
+        print("Model is restored.")
+        print("=" * 70)
 
-        losses = {'train': 1e9}
-        for i, data in data_iter:
-            log_flag = i % self.eval_interval == 0 or i == len(data_iter) - 1
-            if log_flag:
-                losses = self.estimate_loss(data_loader)
 
-            # 0. batch_data will be sent into the device(GPU or cpu)
-            data = {key: value.to(self.device) for key, value in data.items()}
+def describe_tensor(tensor):
+    """
+    Returns descriptive statistics for a 1D PyTorch tensor.
 
-            mask_lm_output = self.model(data["bert_input"])
+    :param tensor: A 1D PyTorch tensor.
+    :return: A dictionary with min, max, mean, standard deviation, 25th percentile, and 75th percentile.
+    """
+    if tensor.dim() != 1:
+        raise ValueError("Tensor must be 1-dimensional.")
 
-            # 2-2. NLLLoss of predicting masked token word
-            # transpose to (m, vocab_size, seq_len) vs (m, seq_len)
-            loss = self.criterion(mask_lm_output.transpose(1, 2), data["bert_label"])
-            # early_stopping(loss)
-            # if early_stopping.stop_flag:
-            #     print("Early Stopping *** *** *** *** *** *** ***")
-            #     break
+    desc_stats = {
+        "min": tensor.min().item(),
+        "max": tensor.max().item(),
+        "mean": tensor.mean().item(),
+        "stddev": tensor.std().item(),
+        "25%": torch.quantile(tensor, 0.25).item(),
+        "75%": torch.quantile(tensor, 0.75).item()
+    }
 
-            # 3. backward and optimization only in train
-            if train:
-                self.optim_schedule.zero_grad()
-                loss.backward()
-                self.optim_schedule.step_and_update_lr()
+    return desc_stats
 
-            avg_loss += loss.item()
-
-            post_fix = {
-                "epoch": epoch,
-                "iter": i,
-                "avg_loss": avg_loss / (i + 1),
-                "loss": loss.item(),
-                "estimated": losses['train'].item()
-            }
-
-            # if i % self.log_freq == 0:
-            if log_flag:
-                data_iter.write(str(post_fix))
-        print(
-            f"EP{epoch}, {mode}: \
-            avg_loss={avg_loss / len(data_iter)}"
-        ) 
+def describe(tensor):
+    """
+    print the descriptive statistics for a 1D PyTorch tensor as one line of text.
+    """
+    stats = describe_tensor(tensor)
+    print(" | ".join([f"{k}: {v:.2f}" for k, v in stats.items()]))
