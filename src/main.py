@@ -1,20 +1,11 @@
-import os
 from pathlib import Path
 import torch
-import re
-import random
 from tokenizers import BertWordPieceTokenizer
 from transformers import BertTokenizer
-import tqdm
-from torch.utils.data import Dataset, DataLoader
-import itertools
-import math
+from torch.utils.data import DataLoader
 import torch.nn.functional as F
-import numpy as np
 from torch.optim import Adam
-import time
 
-from bert import dataset
 from bert.bert import BERT
 from bert.trainer import BERTTrainer
 from bert.bertlm import BERTLM
@@ -29,8 +20,7 @@ D_MODEL = 768
 N_LAYER = 2
 HEADS = 12
 DROPOUT = 0.1
-LEARNING_RATE = 1e-4
-
+LEARNING_RATE = 5e-4
 
 PROFILE = "bee"
 if PROFILE == "bee":
@@ -39,15 +29,16 @@ if PROFILE == "bee":
     BATCH_SIZE = 32
     EVAL_INTERVAL = 200
     EVAL_ITERS = 20
-    D_MODEL = 96 # 192
+    D_MODEL = 48 # 96 # 192
     HEADS = 4
+    N_LAYER = 1
 else:
     PREPARE_DATA = False
-    MAX_LEN = 64 # 64
+    MAX_LEN = 64
     BATCH_SIZE = 64
     EVAL_INTERVAL = 200
     EVAL_ITERS = 20
-    D_MODEL = 768
+    D_MODEL = 768 # 768 
     N_LAYER = 4
     HEADS = 12
 
@@ -87,9 +78,6 @@ lines = [' '.join(line.split()[:MAX_LEN]) for line in lines]
 
 tokenizer = BertTokenizer.from_pretrained('./bert-it-1/bert-it-vocab.txt', local_files_only=True)
 
-       
-
-
 
 '''test run'''
 train_data = BERTDataset(
@@ -108,17 +96,20 @@ bert_model = BERT(
   heads=HEADS, # 6, # 12,
   dropout=DROPOUT,
   max_len=MAX_LEN
-)
+).to(device)
 
-bert_lm = BERTLM(bert_model, len(tokenizer.vocab))
+bert_lm = BERTLM(bert_model, len(tokenizer.vocab)).to(device)
+
 bert_trainer = BERTTrainer(
     bert_lm, 
-    train_loader, eval_loader, test_dataloader=None, 
-    lr=LEARNING_RATE, 
+    train_data,
+    log_dir=Path('./logs'),
+    checkpoint_dir=Path('./checkpoints'),
+    print_every=EVAL_INTERVAL,
+    batch_size=BATCH_SIZE,
+    learning_rate=LEARNING_RATE,
+    epochs=20,
     device=device,
-    eval_interval=EVAL_INTERVAL, eval_iters=EVAL_ITERS
-)
-epochs = 20
+    tokenizer=tokenizer)
 
-for epoch in range(epochs):
-  bert_trainer.train(epoch)        
+bert_trainer.train()
