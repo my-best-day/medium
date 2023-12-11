@@ -3,38 +3,37 @@ import torch
 import datetime
 from pathlib import Path
 from bert.bert import BERT
-from bert.dataset import BERTDataset
+from torch.utils.data import Dataset
 from torch.utils.data import DataLoader
 from torch.utils.tensorboard import SummaryWriter
+from bert.dump_sentences import DumpStentences
 
 from mtimer import MTimer
 
-class BERTTrainer2:
+class BERTTrainer:
     def __init__(self,
                  model: BERT,
-                 dataset: BERTDataset,
                  log_dir: Path,
                  checkpoint_dir: Path,
                  print_every: int,
                  batch_size: int,
                  learning_rate: float,
                  epochs: int,
-                 device: str = 'cpu',
-                 tokenizer=None):
+                 tokenizer,
+                 device: str,
+                 ):
         self.model = model
         self.print_every = print_every
+        self.batch_size = batch_size
         self.epochs = epochs
         self.device = device
         self.tokenizer = tokenizer
 
-        self.ds_size = len(dataset)
-        self.batch_size = batch_size
-        self.batch_count = self.ds_size // batch_size
+        self.dump_sentences = DumpStentences(tokenizer)
 
         betas = (0.9, 0.999)
         weight_decay = 0.015
 
-        self.loader = DataLoader(dataset, batch_size, shuffle=True, pin_memory=True)
         self.criterion = torch.nn.NLLLoss(ignore_index=0).to(device)
         self.optimizer = torch.optim.Adam(model.parameters(), 
                                           lr=learning_rate, betas=betas) # , weight_decay=weight_decay)
@@ -53,110 +52,74 @@ class BERTTrainer2:
         print(f"Total Parameters: {total_parameters:,}")
 
 
+    def before_epoch(self, epoch):
+        pass
+
     def train(self):
         for self.epoch in range(self.start_epoch, self.epochs):
             loss = self.train_epoch(self.epoch)
             self.save_checkpoint(self.epoch, -1, loss)
 
-    def batched_debug(self, sentence, labels, mlm_out):
-        with torch.no_grad():
-            # sentence = sentence.clone()
-            # labels = labels.clone()
-            # mlm_out = mlm_out.clone()
-            B, T, V = mlm_out.shape
-            text = []
-            for b in range(B):
-                if any(element != 0 for element in labels[b]):
-                    english = self.debug(sentence[b], labels[b], mlm_out[b])
-                    text.append(english)
-                    if len(text) >= 10:
-                        break
-            return text
-
-    def debug(self, sentence, labels, mlm_out):
-        english = []
-        for i, id in enumerate(labels):
-            if id != 0:
-                predicted_id = mlm_out[i].argmax(axis=-1)
-                token = f"/{self.convert_id_to_token(predicted_id)}/"
-                # print(f"{predicted_id} -> {token} : {describe(mlm_out[i])}")
-            else:
-                token = self.convert_id_to_token(sentence[i])
-            english.append(token)
-        english = self.convert_tokens_to_string(english)
-        sentence2 = map(lambda i: labels[i] if sentence[i] == self.tokenizer.mask_token_id else sentence[i], range(len(sentence)))
-        source = self.tokenizer.convert_ids_to_tokens(sentence2)
-        source = self.convert_tokens_to_string(source)
-        return f"{english}\n{source}"
-    
-    def convert_id_to_token(self, id):
-        token = self.tokenizer.convert_ids_to_tokens([id])[0]
-        return token
-    
-    def convert_tokens_to_string(self, tokens):
-        import re
-        text = self.tokenizer.convert_tokens_to_string(tokens)
-        cleaned_text = re.sub(r'\[.*?\]\s*', '', text)
-        return cleaned_text
 
     def train_epoch(self, epoch):
         print(f"Begin epoch {epoch + 1}")
+
+        loader = self.before_epoch(epoch)
 
         start_time = time.time()
         accumulated_loss = 0
         mtimer = MTimer()
         mtimer.start('loader')
-        for i, data in enumerate(self.loader):            
+        for i, data in enumerate(loader):            
             mtimer.end('loader')
 
             mtimer.start('to device')
-            sentence, labels = data['bert_input'], data['bert_label']
-
+            sentence, labels = data
             sentence = sentence.to(self.device)
             labels = labels.to(self.device)
             mtimer.end('to device')
 
-            mtimer.start('model')
-            mlm_out = self.model(sentence)
-            mtimer.end('model')
+            if True:
+                mtimer.start('model')
+                mlm_out = self.model(sentence)
+                mtimer.end('model')
 
-            if (i + 1) % self.print_every == 0:
-                mtimer.start('debug')
-                import numpy as np
-                # np.set_printoptions(formatter={'float': '{:0.2f}'.format})
-                # print(mlm_out.detach().cpu().numpy()[0,0,:])
+                if (i + 1) % self.print_every == 0:
+                    mtimer.start('debug')
+                    import numpy as np
+                    # np.set_printoptions(formatter={'float': '{:0.2f}'.format})
+                    # print(mlm_out.detach().cpu().numpy()[0,0,:])
 
-                print("=" * 70 )
-                predicted = self.batched_debug(sentence, labels, mlm_out)
-                print("\n".join(predicted[:10]))
-                print("=" * 70 )
-                mtimer.end('debug')
+                    print("=" * 70 )
+                    predicted = self.dump_sentences.batched_debug(sentence, labels, mlm_out)
+                    print("\n".join(predicted[:10]))
+                    print("=" * 70 )
+                    mtimer.end('debug')
 
-            mtimer.start('loss')    
-            loss = self.criterion(mlm_out.transpose(1, 2), labels)
-            accumulated_loss += loss
-            mtimer.end('loss')
+                mtimer.start('loss')    
+                loss = self.criterion(mlm_out.transpose(1, 2), labels)
+                accumulated_loss += loss
+                mtimer.end('loss')
 
-            mtimer.start('backward')
-            self.optimizer.zero_grad()
-            loss.backward()
-            mtimer.end('backward')
+                mtimer.start('backward')
+                self.optimizer.zero_grad()
+                loss.backward()
+                mtimer.end('backward')
 
-            mtimer.start('step')
-            self.optimizer.step()
-            mtimer.end('step')
-            
-            if (i + 1) % self.print_every == 0:
-                mtimer.start('summary')
-                elapsed = time.time() - start_time
-                summary = self.training_summary(elapsed, (i+1), accumulated_loss)
-                print(summary)
+                mtimer.start('step')
+                self.optimizer.step()
+                mtimer.end('step')
+                
+                if (i + 1) % self.print_every == 0:
+                    elapsed = time.time() - start_time
+                    summary = self.training_summary(elapsed, (i+1), accumulated_loss)
+                    print(summary)
+                    # self.save_checkpoint(self.epoch, i, loss)
+                    accumulated_loss = 0
+                    mtimer.dump()
+            else:
+                loss = torch.tensor([0])
 
-                # self.save_checkpoint(self.epoch, i, loss)
-
-                accumulated_loss = 0
-                mtimer.end('summary')
-                mtimer.dump()
             mtimer.start('loader')
             
         mtimer.dump()
@@ -218,30 +181,70 @@ class BERTTrainer2:
         print("=" * 70)
 
 
-def describe_tensor(tensor):
-    """
-    Returns descriptive statistics for a 1D PyTorch tensor.
+class BERTTrainerSingleDataset(BERTTrainer):
 
-    :param tensor: A 1D PyTorch tensor.
-    :return: A dictionary with min, max, mean, standard deviation, 25th percentile, and 75th percentile.
-    """
-    if tensor.dim() != 1:
-        raise ValueError("Tensor must be 1-dimensional.")
+    def __init__(self,
+                 model: BERT,
+                 log_dir: Path,
+                 checkpoint_dir: Path,
+                 print_every: int,
+                 batch_size: int,
+                 learning_rate: float,
+                 epochs: int,
+                 tokenizer,
+                 device: str,
+                 dataset: Dataset = None):
+            self.dataset = dataset
+            self.loader = None
+            super().__init__(model, log_dir, checkpoint_dir, print_every, batch_size, learning_rate, epochs, tokenizer, device)
 
-    desc_stats = {
-        "min": tensor.min().item(),
-        "max": tensor.max().item(),
-        "mean": tensor.mean().item(),
-        "stddev": tensor.std().item(),
-        "25%": torch.quantile(tensor, 0.25).item(),
-        "75%": torch.quantile(tensor, 0.75).item()
-    }
+    def before_epoch(self, epoch):
+        if self.loader is None:
+            self.ds_size = len(self.dataset)
+            self.batch_size = self.batch_size
+            self.batch_count = self.ds_size // self.batch_size
 
-    return desc_stats
+            # self.loader = DataLoader(dataset, batch_size, num_workers=1, shuffle=True, pin_memory=True)
+            self.loader = DataLoader(self.dataset, self.batch_size, shuffle=True, pin_memory=True)
+        return self.loader
 
-def describe(tensor):
-    """
-    print the descriptive statistics for a 1D PyTorch tensor as one line of text.
-    """
-    stats = describe_tensor(tensor)
-    print(" | ".join([f"{k}: {v:.2f}" for k, v in stats.items()]))
+
+class BERTTrainerPreprocessedDatasets(BERTTrainer):
+    def __init__(self,
+                 model: BERT,
+                 log_dir: Path,
+                 checkpoint_dir: Path,
+                 print_every: int,
+                 batch_size: int,
+                 learning_rate: float,
+                 epochs: int,
+                 tokenizer,
+                 device: str,
+                 dataset_dir: Path,
+                 dataset_pattern: str,
+            ):
+        self.dataset_dir = dataset_dir
+        self.dataset_pattern = dataset_pattern
+        super().__init__(model, log_dir, checkpoint_dir, print_every, batch_size, learning_rate, epochs, tokenizer, device)
+
+
+    def before_epoch(self, epoch):
+        import glob
+        from bert.dataset import BERTDatasetPrecached
+
+        pattern = str(self.dataset_dir / self.dataset_pattern)
+        dataset_files = glob.glob(pattern)
+        dataset_files = sorted(dataset_files)
+        dataset_file = dataset_files[epoch % len(dataset_files)]
+        print(f"Epoch: {epoch} - Loading dataset from {dataset_file}")
+
+        dataset = BERTDatasetPrecached(dataset_file)
+
+        self.ds_size = len(dataset)
+        self.batch_size = self.batch_size
+        self.batch_count = self.ds_size // self.batch_size
+
+        # self.loader = DataLoader(dataset, batch_size, num_workers=1, shuffle=True, pin_memory=True)
+        loader = DataLoader(dataset, self.batch_size, shuffle=True, pin_memory=True)
+        return loader
+

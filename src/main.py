@@ -7,40 +7,16 @@ import torch.nn.functional as F
 from torch.optim import Adam
 
 from bert.bert import BERT
-from bert.trainer import BERTTrainer
+from bert.timer import Timer
+from bert.trainer import BERTTrainer, BERTTrainerSingleDataset, BERTTrainerPreprocessedDatasets
 from bert.bertlm import BERTLM
-from bert.dataset import BERTDataset
+from bert.dataset import BERTDataset, BERTDatasetPrecached
 
-PREPARE_DATA = False
-MAX_LEN = 64 # 64
-BATCH_SIZE = 64
-EVAL_INTERVAL = 200
-EVAL_ITERS = 50
-D_MODEL = 768
-N_LAYER = 2
-HEADS = 12
-DROPOUT = 0.1
-LEARNING_RATE = 5e-4
+import warnings
+from urllib3.exceptions import InsecureRequestWarning
+warnings.simplefilter('ignore', InsecureRequestWarning)
 
-PROFILE = "bee"
-if PROFILE == "bee":
-    PREPARE_DATA = False
-    MAX_LEN = 16 # 32 
-    BATCH_SIZE = 32
-    EVAL_INTERVAL = 200
-    EVAL_ITERS = 20
-    D_MODEL = 48 # 96 # 192
-    HEADS = 4
-    N_LAYER = 1
-else:
-    PREPARE_DATA = False
-    MAX_LEN = 64
-    BATCH_SIZE = 64
-    EVAL_INTERVAL = 200
-    EVAL_ITERS = 20
-    D_MODEL = 768 # 768 
-    N_LAYER = 4
-    HEADS = 12
+from config import *
 
 device = 'cuda' if torch.cuda.is_available() else 'cpu'
 
@@ -57,59 +33,92 @@ device = 'cuda' if torch.cuda.is_available() else 'cpu'
 # - try running on Aleph with larger network, batch, MAX_LEN, etc.
 # - see if we can see the tokens in the output
 
-### loading all data into memory
-corpus_movie_lines = './datasets/movie_lines.txt'
-
-# lineId, characterId, movieId, character name, text
-with open(corpus_movie_lines, 'r', encoding='iso-8859-1') as l:
-    records = l.readlines()
-
-### splitting text using special lines
-# lineId -> text
-lines = []
-for record in records:
-    objects = record.split(" +++$+++ ")
-    line = objects[-1]
-    lines.append(line)
-
-# truncate long sentences
-lines = [' '.join(line.split()[:MAX_LEN]) for line in lines]
+def _main():
+    ### loading all data into memory
+    corpus_movie_lines = './datasets/movie_lines.txt'
 
 
-tokenizer = BertTokenizer.from_pretrained('./bert-it-1/bert-it-vocab.txt', local_files_only=True)
+
+    tokenizer = BertTokenizer.from_pretrained('./bert-it-1/bert-it-vocab.txt', local_files_only=True)
 
 
-'''test run'''
-train_data = BERTDataset(
-   lines, seq_len=MAX_LEN, tokenizer=tokenizer)
+    '''test run'''
+    if False:
+        # lineId, characterId, movieId, character name, text
+        with open(corpus_movie_lines, 'r', encoding='iso-8859-1') as l:
+            records = l.readlines()
 
-train_loader = DataLoader(
-   train_data, batch_size=BATCH_SIZE, shuffle=True, pin_memory=True)
+        ### splitting text using special lines
+        # lineId -> text
+        lines = []
+        for record in records:
+            objects = record.split(" +++$+++ ")
+            line = objects[-1]
+            lines.append(line)
 
-eval_loader = DataLoader(
-    train_data, batch_size=BATCH_SIZE, shuffle=True, pin_memory=True)
+        # truncate long sentences
+        lines = [' '.join(line.split()[:MAX_LEN]) for line in lines]
 
-bert_model = BERT(
-  vocab_size=len(tokenizer.vocab),
-  d_model=D_MODEL, # 192, # 768,
-  n_layers=N_LAYER,
-  heads=HEADS, # 6, # 12,
-  dropout=DROPOUT,
-  max_len=MAX_LEN
-).to(device)
+        train_data = BERTDataset(
+            lines, seq_len=MAX_LEN, tokenizer=tokenizer)
+    else:        
+        # train_data = BERTDatasetPrecached(
+        #     './datasets/train_data_12.pkl.gz')
+        # train_data = BERTDatasetPrecached(
+        #     './datasets/train_data_12.pkl')
+        train_data = BERTDatasetPrecached(
+            './datasets/train_data_12.msgpack.gz')
+        # train_data = BERTDatasetPrecached(
+        #     './datasets/train_data_12.msgpack')
+        pass
 
-bert_lm = BERTLM(bert_model, len(tokenizer.vocab)).to(device)
+    # train_loader = DataLoader(
+    # train_data, batch_size=BATCH_SIZE, shuffle=True, pin_memory=True)
 
-bert_trainer = BERTTrainer(
-    bert_lm, 
-    train_data,
-    log_dir=Path('./logs'),
-    checkpoint_dir=Path('./checkpoints'),
-    print_every=EVAL_INTERVAL,
-    batch_size=BATCH_SIZE,
-    learning_rate=LEARNING_RATE,
-    epochs=20,
-    device=device,
-    tokenizer=tokenizer)
+    # eval_loader = DataLoader(
+    #     train_data, batch_size=BATCH_SIZE, shuffle=True, pin_memory=True)
 
-bert_trainer.train()
+    bert_model = BERT(
+        vocab_size=len(tokenizer.vocab),
+        d_model=D_MODEL,
+        n_layers=N_LAYER,
+        heads=HEADS,
+        dropout=DROPOUT,
+        max_len=MAX_LEN
+    ).to(device)
+
+    bert_lm = BERTLM(bert_model, len(tokenizer.vocab)).to(device)
+
+    if True:
+        bert_trainer = BERTTrainerSingleDataset(
+            bert_lm, 
+            log_dir=Path('./logs'),
+            checkpoint_dir=Path('./checkpoints'),
+            print_every=EVAL_INTERVAL,
+            batch_size=BATCH_SIZE,
+            learning_rate=LEARNING_RATE,
+            epochs=20,
+            tokenizer=tokenizer,
+            device=device,
+            dataset=train_data
+        )
+    else:
+        bert_trainer = BERTTrainerPreprocessedDatasets(
+            bert_lm, 
+            log_dir=Path('./logs'),
+            checkpoint_dir=Path('./checkpoints'),
+            print_every=EVAL_INTERVAL,
+            batch_size=BATCH_SIZE,
+            learning_rate=LEARNING_RATE,
+            epochs=20,
+            tokenizer=tokenizer,
+            device=device,
+            dataset_dir=Path('./datasets'),
+            dataset_pattern='train_data_*.pkl'
+        )
+
+    bert_trainer.train()
+
+if __name__ == '__main__':
+    _main()
+

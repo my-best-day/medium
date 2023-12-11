@@ -11,3 +11,4 @@ logs
 ignore
 .env
 settings.json
+config.py
