@@ -77,9 +77,9 @@ class BERTTrainer:
         for i, data in enumerate(loader):            
             mtimer.end('loader')
 
-            # mtimer.start('unpacking data')
+            mtimer.start('unpacking data')
             sentence, labels = data
-            # mtimer.end('unpacking data')
+            mtimer.end('unpacking data')
             torch.cuda.synchronize()
             mtimer.start('to device labels')
             labels = labels.to(self.device)
@@ -122,11 +122,13 @@ class BERTTrainer:
                 mtimer.end('step')
                 
                 if (i + 1) % self.print_every == 0:
+                    mtimer.start("summary")
                     elapsed = time.time() - start_time
                     summary = self.training_summary(elapsed, (i+1), accumulated_loss)
                     print(summary)
                     # self.save_checkpoint(self.epoch, i, loss)
                     accumulated_loss = 0
+                    mtimer.end("summary")
                     mtimer.dump()
                     timer.print("train step", restart=True)
             else:
