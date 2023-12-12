@@ -80,15 +80,11 @@ class BERTTrainer:
             mtimer.start('unpacking data')
             sentence, labels = data
             mtimer.end('unpacking data')
-            torch.cuda.synchronize()
-            mtimer.start('to device labels')
-            labels = labels.to(self.device)
-            torch.cuda.synchronize()
-            mtimer.end('to device labels')
-            mtimer.start('to device sentence')
+
+            mtimer.start('to device')
             sentence = sentence.to(self.device)
-            torch.cuda.synchronize()
-            mtimer.end('to device sentence')
+            labels = labels.to(self.device)
+            mtimer.end('to device')
 
             if True:
                 mtimer.start('model')
@@ -129,7 +125,7 @@ class BERTTrainer:
                     # self.save_checkpoint(self.epoch, i, loss)
                     accumulated_loss = 0
                     mtimer.end("summary")
-                    mtimer.dump()
+                    # mtimer.dump()
                     timer.print("train step", restart=True)
             else:
                 loss = torch.tensor([0])
