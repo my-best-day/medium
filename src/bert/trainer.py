@@ -8,6 +8,7 @@ from torch.utils.data import DataLoader
 from torch.utils.tensorboard import SummaryWriter
 from bert.dump_sentences import DumpStentences
 
+from bert.timer import Timer
 from mtimer import MTimer
 
 class BERTTrainer:
@@ -70,6 +71,7 @@ class BERTTrainer:
 
         start_time = time.time()
         accumulated_loss = 0
+        timer = Timer("train step")
         mtimer = MTimer()
         mtimer.start('loader')
         for i, data in enumerate(loader):            
@@ -126,6 +128,7 @@ class BERTTrainer:
                     # self.save_checkpoint(self.epoch, i, loss)
                     accumulated_loss = 0
                     mtimer.dump()
+                    timer.print("train step", restart=True)
             else:
                 loss = torch.tensor([0])
 
