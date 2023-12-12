@@ -75,15 +75,15 @@ class BERTTrainer:
         for i, data in enumerate(loader):            
             mtimer.end('loader')
 
-            mtimer.start('unpacking data')
+            # mtimer.start('unpacking data')
             sentence, labels = data
-            mtimer.end('unpacking data')
-            mtimer.start('to device sentence')
-            sentence = sentence.to(self.device)
-            mtimer.end('to device sentence')
+            # mtimer.end('unpacking data')
             mtimer.start('to device labels')
             labels = labels.to(self.device)
             mtimer.end('to device labels')
+            mtimer.start('to device sentence')
+            sentence = sentence.to(self.device)
+            mtimer.end('to device sentence')
 
             if True:
                 mtimer.start('model')
