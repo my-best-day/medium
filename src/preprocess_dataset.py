@@ -1,6 +1,8 @@
 import gzip
-import pickle
 import random
+import pickle
+import msgpack
+
 
 from sklearn.model_selection import train_test_split
 
@@ -13,14 +15,29 @@ from config import *
 
 
 def preprocess_and_cache_dataset(dataset, cache_file):
+    timer = Timer("preprocess_and_cache_dataset")
     preprocessed_data = []
 
     for i in range(len(dataset)):
         data = dataset[i]
         preprocessed_data.append(data)
+    timer.print("preprocessed", True)
 
-    with gzip.open(cache_file, 'wb') as f:
-        pickle.dump(preprocessed_data, f)   
+    # with gzip.open(cache_file, 'wb') as f:
+    #     pickle.dump(preprocessed_data, f)   
+
+    lists =[]
+    for record in preprocessed_data:
+        lists.append(record['bert_input'].tolist())
+        lists.append(record['bert_label'].tolist())
+    timer.print("converted to lists", True)
+
+    # with gzip.open(f"{out_path}.gz", "wb") as file:
+    with gzip.open(cache_file, "wb") as file:
+        packed_data = msgpack.packb(lists)
+        file.write(packed_data)
+    timer.print("wrote msgpack.gz", True)
+
 
 
 def _main():
@@ -31,7 +48,7 @@ def _main():
     timer = Timer()
     
     ### loading all data into memory    
-    corpus_movie_lines = './datasets/movie_lines.txt.gz'
+    corpus_movie_lines = './ignore/movie_lines.txt.gz'
 
     # lineId, characterId, movieId, character name, text
     with gzip.open(corpus_movie_lines, 'rb') as l:
@@ -62,12 +79,13 @@ def _main():
     test_data = BERTDataset(
         test_lines, seq_len=MAX_LEN, tokenizer=tokenizer)
     
-    preprocess_and_cache_dataset(train_data, f'./datasets/train_data_{random_seed}.pkl.gz')
-    preprocess_and_cache_dataset(val_data, f'./datasets/val_data_{random_seed}.pkl.gz')
-    preprocess_and_cache_dataset(test_data, f'./datasets/test_data_{random_seed}.pkl.gz')
+    preprocess_and_cache_dataset(train_data, f'./datasets/train_data_{random_seed}.msgpack.gz')
+    preprocess_and_cache_dataset(val_data, f'./datasets/val_data_{random_seed}.msgpack.gz')
+    preprocess_and_cache_dataset(test_data, f'./datasets/test_data_{random_seed}.msgpack.gz')
     
 
 if __name__ == '__main__':
-    _main()     
+    for _ in range(10):
+        _main()     
 
 
