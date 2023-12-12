@@ -78,11 +78,14 @@ class BERTTrainer:
             # mtimer.start('unpacking data')
             sentence, labels = data
             # mtimer.end('unpacking data')
+            torch.cuda.synchronize()
             mtimer.start('to device labels')
             labels = labels.to(self.device)
+            torch.cuda.synchronize()
             mtimer.end('to device labels')
             mtimer.start('to device sentence')
             sentence = sentence.to(self.device)
+            torch.cuda.synchronize()
             mtimer.end('to device sentence')
 
             if True:
