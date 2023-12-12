@@ -20,41 +20,43 @@ def _main():
     dataset = BERTDatasetPrecached(dataset_file)
    
 
-    sentence_lengths = []
-    labels_lengths = []
+    lengths = []
+
+    total_timer = Timer("total")
     timer = Timer("load precached dataset")
     for i, data in enumerate(dataset):
         sentence, labels = data
         if sentence.any():
             nonzero = sentence.nonzero()
-            max = nonzero.max()
-            maximum = max.item() + 1
+            t_max = nonzero.max()
+            maximum1 = t_max.item() + 1
             del nonzero
-            del max
+            del t_max
         else:
-            maximum = 0        
-        sentence_lengths.append(maximum)
+            maximum1 = 0
+
         del sentence
 
         if labels.any():
             nonzero = labels.nonzero()
-            max = nonzero.max()
-            maximum = max.item() + 1
+            t_max = nonzero.max()
+            maximum2 = t_max.item() + 1
             del nonzero
-            del max
+            del t_max
         else:
-            maximum = 0
+            maximum2 = 0
         del labels
-        labels_lengths.append(maximum)
 
-        if (i + 1) % 1000 == 0:
+        maximum = max(maximum1, maximum2)
+        lengths.append(maximum)
+
+        if (i + 1) % 10000 == 0:
             timer.print(f"Processed {i + 1} samples", restart=True)
 
     print("done processing tensors")
-    sentence_lengths = torch.tensor(sentence_lengths, dtype=torch.float)
-    labels_lengths = torch.tensor(labels_lengths, dtype=torch.float)
-    describe(sentence_lengths)
-    describe(labels_lengths)
+    lengths = torch.tensor(lengths, dtype=torch.float)
+    describe(lengths)
+    total_timer.print("total time")
 
 if __name__ == '__main__':
     _main()
