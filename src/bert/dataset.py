@@ -38,10 +38,12 @@ class BERTDatasetPrecached(Dataset):
         if self._type == 0:
             return self.cached_data[index]['bert_input'], self.cached_data[index]['bert_label']
         elif self._type == 1:
-            sentence = self.cached_data[index * 2]
-            labels = self.cached_data[index * 2 + 1]
-            sentence = torch.tensor(sentence, dtype=torch.int64)
-            labels = torch.tensor(labels, dtype=torch.int64)
+            l_sentence = self.cached_data[index * 2]
+            l_labels = self.cached_data[index * 2 + 1]
+            sentence = torch.tensor(l_sentence, dtype=torch.int64)
+            labels = torch.tensor(l_labels, dtype=torch.int64)
+            del l_sentence
+            del l_labels
             return sentence, labels        
         else:
             raise ValueError(f"Unknown type: {self._type}")
