@@ -40,8 +40,8 @@ class BERTDatasetPrecached(Dataset):
         elif self._type == 1:
             l_sentence = self.cached_data[index * 2]
             l_labels = self.cached_data[index * 2 + 1]
-            sentence = torch.tensor(l_sentence, dtype=torch.int32)
-            labels = torch.tensor(l_labels, dtype=torch.int32)
+            sentence = torch.tensor(l_sentence, dtype=torch.int64)
+            labels = torch.tensor(l_labels, dtype=torch.int64)
             del l_sentence
             del l_labels
             return sentence, labels        
