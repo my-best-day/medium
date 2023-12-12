@@ -66,8 +66,8 @@ def _main():
         #     './datasets/train_data_12.pkl.gz')
         # train_data = BERTDatasetPrecached(
         #     './datasets/train_data_12.pkl')
-        train_data = BERTDatasetPrecached(
-            './datasets/train_data_12.msgpack.gz')
+        # train_data = BERTDatasetPrecached(
+        #     './datasets/train_data_28.msgpack.gz')
         # train_data = BERTDatasetPrecached(
         #     './datasets/train_data_12.msgpack')
         pass
@@ -89,7 +89,7 @@ def _main():
 
     bert_lm = BERTLM(bert_model, len(tokenizer.vocab)).to(device)
 
-    if True:
+    if False:
         bert_trainer = BERTTrainerSingleDataset(
             bert_lm, 
             log_dir=Path('./logs'),
@@ -114,8 +114,15 @@ def _main():
             tokenizer=tokenizer,
             device=device,
             dataset_dir=Path('./datasets'),
-            dataset_pattern='train_data_*.pkl'
+            dataset_pattern='train_data_*.msgpack.gz'
         )
+
+    # use the first available checkpoint id
+    for i in range(100):
+        import glob
+        files = glob.glob(f'./checkpoints/bart_{i}_*.pt')
+        if len(files) == 0:
+            bert_trainer.id = i
 
     bert_trainer.train()
 

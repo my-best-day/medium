@@ -25,7 +25,7 @@ class DumpStentences:
             if id != 0:
                 predicted_id = mlm_out[i].argmax(axis=-1)
                 token = f"/{self.convert_id_to_token(predicted_id)}/"
-                print(f"{predicted_id} -> {token} : {describe(mlm_out[i])}")
+                # print(f"{predicted_id} -> {token} : {describe(mlm_out[i])}")
             else:
                 token = self.convert_id_to_token(sentence[i])
             english.append(token)

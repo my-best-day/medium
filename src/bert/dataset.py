@@ -47,7 +47,7 @@ class BERTDatasetPrecached(Dataset):
             raise ValueError(f"Unknown type: {self._type}")
 
 class BERTDataset(Dataset):
-    def __init__(self, lines, tokenizer, seq_len=64):
+    def __init__(self, lines, tokenizer, seq_len):
 
         self.tokenizer = tokenizer
         self.seq_len = seq_len

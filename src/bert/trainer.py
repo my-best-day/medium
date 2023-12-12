@@ -29,6 +29,8 @@ class BERTTrainer:
         self.device = device
         self.tokenizer = tokenizer
 
+        self.id = None
+
         self.dump_sentences = DumpStentences(tokenizer)
 
         betas = (0.9, 0.999)
@@ -151,7 +153,8 @@ class BERTTrainer:
     def save_checkpoint(self, epoch: int, index: int, loss: float):
         global_step = epoch * self.batch_count + index
         start_time = time.time()
-        name = f"bert_epoch{epoch}_index{global_step}_{datetime.datetime.utcnow().timestamp():.0f}.pt"
+        id = self.id if self.id is not None else ''
+        name = f"bert_{id}_epoch{epoch}_index{global_step}_{datetime.datetime.utcnow().timestamp():.0f}.pt"
         torch.save({
             'epoch': epoch,
             'model_state_dict': self.model.state_dict(),
