@@ -123,6 +123,7 @@ def _main():
         files = glob.glob(f'./checkpoints/bart_{i}_*.pt')
         if len(files) == 0:
             bert_trainer.id = i
+            break
 
     bert_trainer.train()
 
