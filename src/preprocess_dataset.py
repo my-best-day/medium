@@ -79,9 +79,9 @@ def _main():
     test_data = BERTDataset(
         test_lines, seq_len=MAX_LEN, tokenizer=tokenizer)
     
-    preprocess_and_cache_dataset(train_data, f'./datasets/train_data_{random_seed}.msgpack.gz')
-    preprocess_and_cache_dataset(val_data, f'./datasets/val_data_{random_seed}.msgpack.gz')
-    preprocess_and_cache_dataset(test_data, f'./datasets/test_data_{random_seed}.msgpack.gz')
+    preprocess_and_cache_dataset(train_data, f'./datasets32/train_data_{random_seed}.msgpack.gz')
+    preprocess_and_cache_dataset(val_data, f'./datasets32/val_data_{random_seed}.msgpack.gz')
+    preprocess_and_cache_dataset(test_data, f'./datasets32/test_data_{random_seed}.msgpack.gz')
     
 
 if __name__ == '__main__':
