@@ -45,14 +45,14 @@ if [ -n "$FILES" ]; then
 fi
 
 # Check for empty directories in 'logs' and 'checkpoints'
-DIRS=$(find logs checkpoints -mindepth 1 -type d -empty)
+DIRS=$(find -L logs checkpoints -mindepth 1 -type d -empty)
 if [ -n "$DIRS" ]; then
   echo "Found empty directories:"
   echo "$DIRS"
   echo "Use -f to delete."
   if [ $FORCE -eq 1 ]; then
     echo "Deleting directories..."
-    find logs checkpoints -mindepth 1 -type d -empty -delete
+    find -L logs checkpoints -mindepth 1 -type d -empty -print0 | xargs -0 rmdir
   else
     exit 1
   fi
