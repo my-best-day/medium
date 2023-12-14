@@ -42,7 +42,7 @@ class BERTTrainer:
                                           lr=learning_rate, betas=betas) # , weight_decay=weight_decay)
         # self.optimizer_schedule = ScheduledOptim(self.optimizer, model.d_model, n_warmup_steps=10000)
 
-        self._logs_dir = logs_dir
+        self.logs_dir = logs_dir
         self.checkpoints_dir = checkpoints_dir
         self._writer = None
 
@@ -67,11 +67,11 @@ class BERTTrainer:
     def train(self):
         for self.epoch in range(self.start_epoch, self.epochs):
             loss = self.train_epoch(self.epoch)
-            self.save_checkpoint(self.epoch, -1, loss)
+            self.save_checkpoint(self.epoch + 1, -1, loss)
 
 
     def train_epoch(self, epoch):
-        print(f"Begin epoch {epoch + 1}")
+        print(f"Begin epoch {epoch}")
 
         loader = self.before_epoch(epoch)
 
@@ -148,7 +148,7 @@ class BERTTrainer:
         result = " | ".join([
             time.strftime('%H:%M:%S', time.gmtime(elsapsed)),
             f"(r:{self.estimate_remaining_time(passed, elsapsed)})",
-            f"Epocn {self.epoch + 1}",
+            f"Epocn {self.epoch}",
             f"{index} / {self.batch_count} ({passed:6.2%})",
             f"MLM loss: {mlm_loss:6.2f}",
         ])
@@ -169,6 +169,7 @@ class BERTTrainer:
         start_time = time.time()
         name = f"bert_epoch{epoch}_index{global_step}_{datetime.datetime.utcnow().timestamp():.0f}.pt"
         torch.save({
+            'version': 0.1,
             'epoch': epoch,
             'model_state_dict': self.model.state_dict(),
             'optimizer_state_dict': self.optimizer.state_dict(),
@@ -189,7 +190,8 @@ class BERTTrainer:
         print("=" * 70)
         print(f"Restoring model {path}")
         checkpoint = torch.load(path)
-        self.epoch = checkpoint['epoch']
+        version = checkpoint.get('version', 0)
+        self.epoch = checkpoint['epoch'] + (1 if version == 0 else 0)
         self.model.load_state_dict(checkpoint['model_state_dict'])
         self.optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
         self.start_epoch = self.epoch

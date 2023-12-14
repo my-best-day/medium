@@ -14,9 +14,6 @@ from bert.trainer import BERTTrainer, BERTTrainerSingleDataset, BERTTrainerPrepr
 from bert.bertlm import BERTLM
 from bert.dataset import BERTDataset, BERTDatasetPrecached
 
-import warnings
-from urllib3.exceptions import InsecureRequestWarning
-warnings.simplefilter('ignore', InsecureRequestWarning)
 
 from config import *
 
