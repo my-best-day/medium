@@ -84,15 +84,15 @@ def _main(args):
     else:
         bert_trainer = BERTTrainerPreprocessedDatasets(
             bert_lm, 
-            log_dir=logs_dir,
+            logs_dir=logs_dir,
             checkpoints_dir=checkpoints_dir,
             print_every=EVAL_INTERVAL,
             batch_size=BATCH_SIZE,
             learning_rate=LEARNING_RATE,
-            epochs=20,
+            epochs=args.epochs,
             tokenizer=tokenizer,
             device=device,
-            dataset_dir=Path('./datasets'),
+            dataset_dir=Path('./datasets32'),
             dataset_pattern='train_data_*.msgpack'
         )
 
@@ -107,9 +107,8 @@ def get_args():
     Parses command-line arguments for the training script.
 
     Args:
-    -c, --continue: Flag to load the checkpoint and continue training from there.
     --cp, --checkpoint <path>: Path to a specific checkpoint. The continue flag is expected.
-    --run <path>: Path to a run directory in the format run<id>. The continue flag is expected.
+    -e, --epochs <int>: Number of epochs to train.
 
     Returns:
     argparse.Namespace: Parsed command-line arguments.
@@ -118,17 +117,11 @@ def get_args():
     parser = argparse.ArgumentParser(description="Process arguments for training.")
 
     # Add arguments
-    parser.add_argument('-c', '--continue', dest='cont', action='store_true', help='Continue training from the last checkpoint.')
-    parser.add_argument('--cp', '--checkpoint', type=str, metavar='<path>', help='Path to a specific checkpoint. Requires -c/--continue.')
-    parser.add_argument('--run', type=str, metavar='<path>', help='Path to a run directory in the format run<id>. Requires -c/--continue.')
-    parser.add_argument('-e', '--epochs', type=int, default=20, help='Number of epochs to train.')
+    parser.add_argument('--checkpoint', '--cp', type=str, default=None, metavar='<path>', help='Path to a specific checkpoint.')
+    parser.add_argument('--epochs', '-e', type=int, default=20, help='Number of epochs to train.')
 
     # Parse arguments
     args = parser.parse_args()
-
-    # Validating that --cp and --run are used with -c/--continue
-    if (args.cp or args.run) and not args.cont:
-        parser.error("--cp/--checkpoint and --run require -c/--continue.")
 
     if args.checkpoint is not None:
         path = Path(args.checkpoint)
@@ -137,14 +130,6 @@ def get_args():
 
     if args.epochs <= 0:
         parser.error('Number of epochs must be positive.')
-
-    # Validate --run argument
-    if args.run is not None:
-        prefix, run_id_str = args.run[:3], args.run[3:]
-        if prefix != 'run' or not run_id_str.isdigit():
-            parser.error("--run argument must be in the format 'run<number>'.")
-        else:
-            args.run_id = int(run_id_str)    
 
     return args
 

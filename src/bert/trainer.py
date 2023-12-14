@@ -42,8 +42,9 @@ class BERTTrainer:
                                           lr=learning_rate, betas=betas) # , weight_decay=weight_decay)
         # self.optimizer_schedule = ScheduledOptim(self.optimizer, model.d_model, n_warmup_steps=10000)
 
-        self.writer = SummaryWriter(str(logs_dir))
+        self._logs_dir = logs_dir
         self.checkpoints_dir = checkpoints_dir
+        self._writer = None
 
         self.start_epoch = 0
         self.epoch = 0
@@ -54,6 +55,11 @@ class BERTTrainer:
         total_parameters = sum([p.nelement() for p in self.model.parameters()])
         print(f"Total Parameters: {total_parameters:,}")
 
+    @property
+    def writer(self):
+        if self._writer is None:
+            self._writer = SummaryWriter(str(self.logs_dir))
+        return self._writer      
 
     def before_epoch(self, epoch):
         pass
@@ -245,7 +251,9 @@ class BERTTrainerPreprocessedDatasets(BERTTrainer):
         pattern = str(self.dataset_dir / self.dataset_pattern)
         # add an optional .gz extension to the pattern
 
-        dataset_files = glob.glob(pattern)
+        dataset_files = glob.glob(pattern) + glob.glob(pattern + '.gz')
+        if len(dataset_files) == 0:
+            raise ValueError(f"Dataset files not found with pattern {pattern}")
         dataset_files = sorted(dataset_files)
         dataset_file = dataset_files[epoch % len(dataset_files)]
         print(f"Epoch: {epoch} - Loading dataset from {dataset_file}")
