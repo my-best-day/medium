@@ -55,7 +55,7 @@ def _main(args):
 
         if args.data_parallel:
             # bert_lm = torch.nn.DataParallel(bert_lm)
-            bert_lm = torch.nn.DistributedDataParallel(bert_lm)
+            bert_lm = torch.nn.parallel.DistributedDataParallel(bert_lm)
         bert_lm = bert_lm.to(device)
 
 
