@@ -14,7 +14,7 @@ device = 'cuda' if torch.cuda.is_available() else 'cpu'
 
 # todo:
 # + see how batches are used
-# - add randomization in the sampling 
+# - add randomization in the sampling
 #   - I'm not sure how ipmortant this is, there is nothing special in the order of the sentences
 # - add estimate_loss
 # - see about how to move lines/data to device. gpt.py does it differently than here
@@ -54,7 +54,8 @@ def _main(args):
         bert_model = bert_model.to(device)
 
         if args.data_parallel:
-            bert_lm = torch.nn.DataParallel(bert_lm)
+            # bert_lm = torch.nn.DataParallel(bert_lm)
+            bert_lm = torch.nn.DistributedDataParallel(bert_lm)
         bert_lm = bert_lm.to(device)
 
 
@@ -69,7 +70,7 @@ def _main(args):
         #     './datasets/train_data_12.msgpack')
 
         bert_trainer = BERTTrainerSingleDataset(
-            bert_lm, 
+            bert_lm,
             log_dir=Path('./logs'),
             checkpoint_dir=Path('./checkpoints'),
             print_every=EVAL_INTERVAL,
@@ -82,7 +83,7 @@ def _main(args):
         )
     else:
         bert_trainer = BERTTrainerPreprocessedDatasets(
-            bert_lm, 
+            bert_lm,
             logs_dir=logs_dir,
             checkpoints_dir=checkpoints_dir,
             print_every=EVAL_INTERVAL,
@@ -119,7 +120,7 @@ def get_args():
     # Add arguments
     parser.add_argument('--checkpoint', '--cp', type=str, default=None, metavar='<path>', help='Path to a specific checkpoint.')
     parser.add_argument('--epochs', '-e', type=int, default=20, help='Number of epochs to train.')
-    parser.add_argument('--data-parallel', '-d', action='store_true', help='Use DataParallel for training')    
+    parser.add_argument('--data-parallel', '-d', action='store_true', help='Use DataParallel for training')
 
     # Parse arguments
     args = parser.parse_args()
@@ -127,7 +128,7 @@ def get_args():
     if args.checkpoint is not None:
         path = Path(args.checkpoint)
         if not path.exists():
-            parser.error(f'Checkpoint {path} does not exist.')        
+            parser.error(f'Checkpoint {path} does not exist.')
 
     if args.epochs <= 0:
         parser.error('Number of epochs must be positive.')
@@ -147,4 +148,3 @@ def get_next_run_id(parent_path: Path):
 if __name__ == '__main__':
     args = get_args()
     _main(args)
-
