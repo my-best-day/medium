@@ -152,17 +152,23 @@ class BERTTrainer:
                 eval_loss = self.eval_loss(eval_loader)
                 mtimer.end('eval')
                 summary = self.training_summary(elapsed, (i+1), accumulated_loss, eval_loss)
+                print("-" * 70)
                 print(summary)
+                print("-" * 70)
                 # self.save_checkpoint(self.epoch, i, loss)
                 accumulated_loss = 0
                 timer.print("train step", restart=True)
+                print("-" * 70)
 
             mtimer.start('batch')
 
         eval_loss = self.eval_loss(eval_loader)
         summary = self.training_summary(elapsed, i, epoch_accumulated_loss, eval_loss, True)
+        print("-" * 70)
         print(summary)
+        print("-" * 70)
         mtimer.dump()
+        print("-" * 70)
 
         return loss
 
