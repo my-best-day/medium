@@ -151,7 +151,7 @@ class BERTTrainer:
                 mtimer.start('eval')
                 eval_loss = self.eval_loss(eval_loader)
                 mtimer.end('eval')
-                summary = self.training_summary(elapsed, (i+1), accumulated_loss, eval_loss)
+                summary = self.training_summary(elapsed, i, accumulated_loss, eval_loss)
                 print("-" * 70)
                 print(summary)
                 print("-" * 70)
