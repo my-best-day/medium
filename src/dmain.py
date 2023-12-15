@@ -1,18 +1,11 @@
-import glob
 import torch
 import argparse
 from pathlib import Path
-from tokenizers import BertWordPieceTokenizer
 from transformers import BertTokenizer
-from torch.utils.data import DataLoader
-import torch.nn.functional as F
-from torch.optim import Adam
 
 from bert.bert import BERT
-from bert.timer import Timer
-from bert.trainer import BERTTrainer, BERTTrainerSingleDataset, BERTTrainerPreprocessedDatasets
 from bert.bertlm import BERTLM
-from bert.dataset import BERTDataset, BERTDatasetPrecached
+from bert.trainer import BERTTrainerSingleDataset, BERTTrainerPreprocessedDatasets
 
 
 from config import *
@@ -60,7 +53,8 @@ def _main(args):
         # bert_model = torch.nn.DataParallel(bert_model)
         bert_model = bert_model.to(device)
 
-        bert_lm = torch.nn.DataParallel(bert_lm)
+        if args.data_parallel:
+            bert_lm = torch.nn.DataParallel(bert_lm)
         bert_lm = bert_lm.to(device)
 
 
@@ -124,6 +118,7 @@ def get_args():
     # Add arguments
     parser.add_argument('--checkpoint', '--cp', type=str, default=None, metavar='<path>', help='Path to a specific checkpoint.')
     parser.add_argument('--epochs', '-e', type=int, default=20, help='Number of epochs to train.')
+    parser.add_argument('--data-parallel', '-d', action='store_true', help='Use DataParallel for training')    
 
     # Parse arguments
     args = parser.parse_args()
