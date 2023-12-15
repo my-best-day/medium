@@ -158,7 +158,7 @@ class BERTTrainer:
             mtimer.start('batch')
 
         eval_loss = self.eval_loss(eval_loader)
-        summary = summary.self.training_summary(elapsed, (i+1), accumulated_loss)
+        summary = self.training_summary(elapsed, (i+1), accumulated_loss)
         print(summary)
         mtimer.dump()
 
