@@ -21,12 +21,14 @@ class MTimer:
             self.records[key]['calls'] += 1
             self.records[key]['start_time'] = None
 
-    def dump(self):
+    def dump(self, reset=True):
         for key in self.records:
             total_time = self.records[key]['total_time']
             calls = self.records[key]['calls']
             avg_time = total_time / calls if calls > 0 else 0
             print(f'{key}: {calls} calls, {total_time:.3f} sec, {avg_time:.3f} s/c')
+        if reset:
+            self.reset()
 
     def reset(self):
         self.records = {}

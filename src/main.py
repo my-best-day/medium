@@ -92,7 +92,8 @@ def _main(args):
             tokenizer=tokenizer,
             device=device,
             dataset_dir=Path('./datasets32'),
-            dataset_pattern='train_data_*.msgpack'
+            dataset_pattern='train_data_*.msgpack',
+            eval_pattern='val_data_*.msgpack',
         )
 
     if args.checkpoint:
