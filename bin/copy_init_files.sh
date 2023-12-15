@@ -19,10 +19,10 @@ fi
 
 # list of files to copy
 files=(
-    "~/.ssh/git_rsa"
-    "~/dev/torch/medium/ignore/datasets32.tar"
-    "~/dev/torch/medium/bert-it-1/bert-it-vocab.txt"
-    "~/dev/torch/medium/src/config.py"
+    ~/.ssh/git_rsa
+    ~/dev/torch/medium/ignore/datasets32.tar
+    ~/dev/torch/medium/bert-it-1/bert-it-vocab.txt
+    ~/dev/torch/medium/src/config.py
 )
 
 # copy each file
@@ -38,17 +38,17 @@ cat << EOF
 touch .no_auto_tmux
 mv git_rsa .ssh/
 eval "\$(ssh-agent -s)"
-ssh-add ~/.ssh/git_rsa 
+ssh-add ~/.ssh/git_rsa
 git clone git@github.com:my-best-day/medium.git
 mkdir medium/bert-it-1
 mv bert-it-vocab.txt medium/bert-it-1/
 cd medium/
-tar xfv ~/datasets32.tar 
+tar xfv ~/datasets32.tar
 mv ~/config.py src/
 sudo apt update
 apt install vim
-vi src/config.py 
+vi src/config.py
 pip install --upgrade pip
-pip install -r requirements.txt 
+pip install -r requirements.txt
 mkdir logs checkpoints
 EOF
