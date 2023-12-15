@@ -3,3 +3,4 @@ datasets
 tokenizers
 tensorboard
 msgpack
+torch-tb-profiler
