@@ -108,6 +108,7 @@ class BERTTrainer:
 
         start_time = time.time()
         mtimer = MTimer()
+        epoch_accumulated_loss = 0
         accumulated_loss = 0
         timer = Timer()
         mtimer.start('batch')
@@ -137,6 +138,7 @@ class BERTTrainer:
             mtimer.start('loss')
             loss = self.criterion(mlm_out.transpose(1, 2), labels)
             accumulated_loss += loss
+            epoch_accumulated_loss += loss
             mtimer.end('loss')
 
             self.optimizer.zero_grad()
@@ -158,16 +160,17 @@ class BERTTrainer:
             mtimer.start('batch')
 
         eval_loss = self.eval_loss(eval_loader)
-        summary = self.training_summary(elapsed, (i+1), accumulated_loss)
+        summary = self.training_summary(elapsed, i, epoch_accumulated_loss, eval_loss, True)
         print(summary)
         mtimer.dump()
 
         return loss
 
-    def training_summary(self, elsapsed, index, accumulated_loss, eval_loss=None):
-        passed = index / self.batch_count
+    def training_summary(self, elsapsed, index, accumulated_loss, eval_loss=None, batch_end=False):
+        passed = 1.0 if batch_end else index / self.batch_count
         global_step = self.epoch * self.batch_count + index
-        mlm_loss = accumulated_loss / self.print_every
+        denominator = self.batch_count if batch_end else self.print_every
+        mlm_loss = accumulated_loss / denominator
         items = [
             time.strftime('%H:%M:%S', time.gmtime(elsapsed)),
             f"(r:{self.estimate_remaining_time(passed, elsapsed)})",
