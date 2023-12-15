@@ -179,6 +179,8 @@ class BERTTrainer:
             items.append(f"Eval loss: {eval_loss:6.2f}")
         result = " | ".join(items)
         self.writer.add_scalar("MLM loss", mlm_loss, global_step=global_step)
+        if eval_loss is not None:
+            self.writer.add_scalar("Eval loss", eval_loss, global_step=global_step)
         return result
 
     @staticmethod
