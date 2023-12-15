@@ -52,11 +52,11 @@ def _main(args):
     if torch.cuda.is_available():
         # bert_model = torch.nn.DataParallel(bert_model)
         bert_model = bert_model.to(device)
+        bert_lm = bert_lm.to(device)
 
         if args.data_parallel:
             # bert_lm = torch.nn.DataParallel(bert_lm)
             bert_lm = torch.nn.parallel.DistributedDataParallel(bert_lm)
-        bert_lm = bert_lm.to(device)
 
 
     if False:
