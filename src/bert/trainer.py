@@ -125,7 +125,7 @@ class BERTTrainer:
             mlm_out = self.model(sentence)
             mtimer.end('forward')
 
-            if (i + 1) % self.print_every == 0:
+            if False and (i + 1) % self.print_every == 0:
                 # import numpy as np
                 # np.set_printoptions(formatter={'float': '{:0.2f}'.format})
                 # print(mlm_out.detach().cpu().numpy()[0,0,:])
@@ -149,7 +149,8 @@ class BERTTrainer:
             if (i + 1) % self.print_every == 0:
                 elapsed = time.time() - start_time
                 mtimer.start('eval')
-                eval_loss = self.eval_loss(eval_loader)
+                # eval_loss = self.eval_loss(eval_loader)
+                eval_loss = None
                 mtimer.end('eval')
                 summary = self.training_summary(elapsed, i, accumulated_loss, eval_loss)
                 print("-" * 70)
@@ -248,9 +249,13 @@ class BERTTrainerSingleDataset(BERTTrainer):
                  epochs: int,
                  tokenizer,
                  device: str,
-                 dataset: Dataset = None):
-            self.dataset = dataset
+                 train_dataset: Dataset,
+                 val_dataset: Dataset,
+                 ):
+            self.train_dataset = train_dataset
+            self.val_dataset = val_dataset
             self.loader = None
+            self.val_loader = None
             super().__init__(model, logs_dir, checkpoints_dir, print_every, batch_size, learning_rate, epochs, tokenizer, device)
 
     def before_epoch(self, epoch):
@@ -261,7 +266,9 @@ class BERTTrainerSingleDataset(BERTTrainer):
 
             # self.loader = DataLoader(dataset, batch_size, num_workers=1, shuffle=True, pin_memory=True)
             self.loader = DataLoader(self.dataset, self.batch_size, shuffle=True, pin_memory=True)
-        return self.loader
+            self.val_loader = DataLoader(self.val_dataset, self.batch_size, shuffle=False, pin_memory=True)
+
+        return self.loader, self.val_loader
 
 
 class BERTTrainerPreprocessedDatasets(BERTTrainer):

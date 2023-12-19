@@ -30,7 +30,7 @@ def _main(args, base_dir: Path):
     if False:
         tokenizer = BertTokenizer.from_pretrained('./bert-it-1/bert-it-vocab.txt', local_files_only=True)
     else:
-        tokenizer = InstacartTokenizer()
+        tokenizer = InstacartTokenizer(base_dir / 'vocab' / 'instacart_vocab.txt')
 
     bert_model = BERT(
         vocab_size=len(tokenizer.vocab),
@@ -53,9 +53,8 @@ def _main(args, base_dir: Path):
             bert_lm = torch.nn.parallel.DistributedDataParallel(bert_lm)
 
 
-    if True:
+    if False:
         ZZZZZZ
-
         bert_trainer = BERTTrainerSingleDataset(
             bert_lm,
             log_dir=Path('./logs'),
@@ -79,7 +78,7 @@ def _main(args, base_dir: Path):
             epochs=args.epochs,
             tokenizer=tokenizer,
             device=device,
-            dataset_dir=Path('./datasets32'),
+            dataset_dir=Path('./datasets32/instacart'),
             dataset_pattern='train_data_*.msgpack',
             eval_pattern='val_data_*.msgpack',
         )
@@ -134,4 +133,4 @@ def get_next_run_id(parent_path: Path):
 
 if __name__ == '__main__':
     args = get_args()
-    _main(args)
+    _main(args, Path('./instacart'))
