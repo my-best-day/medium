@@ -1,4 +1,5 @@
 import torch
+import torch.distributed as dist
 import argparse
 from pathlib import Path
 from transformers import BertTokenizer
@@ -11,9 +12,21 @@ from bert.trainer import BERTTrainerSingleDataset, BERTTrainerPreprocessedDatase
 from config import *
 from instacart.instacart_tokenizer import InstacartTokenizer
 
-device = 'cuda' if torch.cuda.is_available() else 'cpu'
+DISTRIBUTED = True
+
+if DISTRIBUTED:
+    pass
+else:
+    device = 'cuda' if torch.cuda.is_available() else 'cpu'
+
+
+
+
+
 
 def _main(args, base_dir: Path):
+    device = args.device
+
     # figured out the next run id
     base_logs_dir = base_dir / 'logs'
     base_checkpoints_dir = base_dir / 'checkpoints'
@@ -49,8 +62,10 @@ def _main(args, base_dir: Path):
         bert_lm = bert_lm.to(device)
 
         if args.data_parallel:
-            bert_lm = torch.nn.DataParallel(bert_lm)
-            # bert_lm = torch.nn.parallel.DistributedDataParallel(bert_lm)
+            if DISTRIBUTED:
+                bert_lm = torch.nn.parallel.DistributedDataParallel(bert_lm, device_ids=[local_rank])
+            else:
+                bert_lm = torch.nn.DataParallel(bert_lm)
 
 
     if False:
@@ -108,6 +123,7 @@ def get_args():
     parser.add_argument('--checkpoint', '--cp', type=str, default=None, metavar='<path>', help='Path to a specific checkpoint.')
     parser.add_argument('--epochs', '-e', type=int, default=20, help='Number of epochs to train.')
     parser.add_argument('--data-parallel', '-d', action='store_true', help='Use DataParallel for training')
+    parser.add_argument('--local-rank', type=int, default=0, help='Local rank. Necessary for using the torch.distributed.launch utility.')
 
     # Parse arguments
     args = parser.parse_args()
@@ -119,6 +135,16 @@ def get_args():
 
     if args.epochs <= 0:
         parser.error('Number of epochs must be positive.')
+
+
+    local_rank = args.local_rank
+    torch.cuda.set_device(local_rank)
+    dist.init_process_group(backend='nccl', init_method='env://')
+
+    # local_rank = torch.distributed.get_rank()
+    torch.cuda.set_device(local_rank)
+    device = torch.device(f"cuda:{local_rank}")
+    args.device = device
 
     return args
 

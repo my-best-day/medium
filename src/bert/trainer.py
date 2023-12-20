@@ -9,6 +9,7 @@ from torch.utils.data import DataLoader
 from torch.utils.tensorboard import SummaryWriter
 from bert.dump_sentences import DumpStentences
 from bert.scheduled_optim import ScheduledOptim
+from torch.utils.data.distributed import DistributedSampler
 
 from mtimer import MTimer
 from bert.timer import Timer
@@ -72,7 +73,7 @@ class BERTTrainer:
         for self.epoch in range(self.start_epoch, self.epochs):
             loss = self.train_epoch(self.epoch)
             self.save_checkpoint(self.epoch + 1, -1, loss)
-            self.optimizer_schedule.step()
+            # self.optimizer_schedule.step()
 
 
 
@@ -144,10 +145,12 @@ class BERTTrainer:
             epoch_accumulated_loss += loss
             mtimer.end('loss')
 
-            self.optimizer.zero_grad()
+            # self.optimizer.zero_grad()
+            self.optimizer_schedule.zero_grad()
             loss.backward()
 
-            self.optimizer.step()
+            # self.optimizer.step()
+            self.optimizer_schedule.step_and_update_lr()
 
             if (i + 1) % self.print_every == 0:
                 elapsed = time.time() - start_time
@@ -166,7 +169,7 @@ class BERTTrainer:
 
             mtimer.start('batch')
 
-        eval_loss = self.eval_loss(eval_loader)
+        eval_loss = self.eval_loss(eval_loader) if eval_loader is not None else None
         summary = self.training_summary(elapsed, i, epoch_accumulated_loss, eval_loss, True)
         print("-" * 70)
         print(summary)
@@ -302,10 +305,20 @@ class BERTTrainerPreprocessedDatasets(BERTTrainer):
         self.ds_size = len(dataset)
         self.batch_size = self.batch_size
         self.batch_count = self.ds_size // self.batch_size
-        loader = DataLoader(dataset, self.batch_size, shuffle=True, pin_memory=True)
 
-        eval_dataset = self.get_dataset(epoch, False)
-        eval_loader = DataLoader(eval_dataset, self.batch_size, shuffle=False, pin_memory=True)
+        sampler = DistributedSampler(dataset)
+        sampler.set_epoch(epoch)
+
+        # self.ds_size = len(sampler)
+        # self.batch_size = self.batch_size
+        # self.batch_count = self.ds_size // self.batch_size
+
+        # loader = DataLoader(dataset, self.batch_size, shuffle=True, pin_memory=True)
+        loader = DataLoader(dataset, sampler=sampler, batch_size=self.batch_size, pin_memory=True)
+
+        # eval_dataset = self.get_dataset(epoch, False)
+        # eval_loader = DataLoader(eval_dataset, self.batch_size, shuffle=False, pin_memory=True)
+        eval_loader = None
         return loader, eval_loader
 
     def get_dataset(self, epoch, train):
