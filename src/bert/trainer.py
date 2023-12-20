@@ -8,6 +8,7 @@ from torch.utils.data import Dataset
 from torch.utils.data import DataLoader
 from torch.utils.tensorboard import SummaryWriter
 from bert.dump_sentences import DumpStentences
+from bert.scheduled_optim import ScheduledOptim
 
 from mtimer import MTimer
 from bert.timer import Timer
@@ -41,8 +42,8 @@ class BERTTrainer:
 
         self.criterion = torch.nn.NLLLoss(ignore_index=0).to(device)
         self.optimizer = torch.optim.Adam(model.parameters(),
-                                          lr=learning_rate, betas=betas) # , weight_decay=weight_decay)
-        # self.optimizer_schedule = ScheduledOptim(self.optimizer, model.d_model, n_warmup_steps=10000)
+                                          lr=learning_rate, betas=betas, weight_decay=weight_decay)
+        self.optimizer_schedule = ScheduledOptim(self.optimizer, model.d_model, n_warmup_steps=10000)
 
         self.logs_dir = logs_dir
         self.checkpoints_dir = checkpoints_dir
@@ -70,6 +71,7 @@ class BERTTrainer:
         for self.epoch in range(self.start_epoch, self.epochs):
             loss = self.train_epoch(self.epoch)
             self.save_checkpoint(self.epoch + 1, -1, loss)
+            self.optimizer_schedule.step()
 
 
 
