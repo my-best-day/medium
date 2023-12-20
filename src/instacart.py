@@ -49,8 +49,8 @@ def _main(args, base_dir: Path):
         bert_lm = bert_lm.to(device)
 
         if args.data_parallel:
-            # bert_lm = torch.nn.DataParallel(bert_lm)
-            bert_lm = torch.nn.parallel.DistributedDataParallel(bert_lm)
+            bert_lm = torch.nn.DataParallel(bert_lm)
+            # bert_lm = torch.nn.parallel.DistributedDataParallel(bert_lm)
 
 
     if False:
@@ -81,6 +81,7 @@ def _main(args, base_dir: Path):
             dataset_dir=Path('./datasets32/instacart'),
             dataset_pattern='train_data_*.msgpack',
             eval_pattern='val_data_*.msgpack',
+            d_model=D_MODEL
         )
 
     if args.checkpoint:

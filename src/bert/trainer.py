@@ -25,6 +25,7 @@ class BERTTrainer:
                  epochs: int,
                  tokenizer,
                  device: str,
+                 d_model: int,
                  ):
         self.model = model
         self.print_every = print_every
@@ -43,7 +44,7 @@ class BERTTrainer:
         self.criterion = torch.nn.NLLLoss(ignore_index=0).to(device)
         self.optimizer = torch.optim.Adam(model.parameters(),
                                           lr=learning_rate, betas=betas, weight_decay=weight_decay)
-        self.optimizer_schedule = ScheduledOptim(self.optimizer, model.d_model, n_warmup_steps=10000)
+        self.optimizer_schedule = ScheduledOptim(self.optimizer, d_model, n_warmup_steps=10000)
 
         self.logs_dir = logs_dir
         self.checkpoints_dir = checkpoints_dir
@@ -253,12 +254,13 @@ class BERTTrainerSingleDataset(BERTTrainer):
                  device: str,
                  train_dataset: Dataset,
                  val_dataset: Dataset,
+                 d_model: int,
                  ):
             self.train_dataset = train_dataset
             self.val_dataset = val_dataset
             self.loader = None
             self.val_loader = None
-            super().__init__(model, logs_dir, checkpoints_dir, print_every, batch_size, learning_rate, epochs, tokenizer, device)
+            super().__init__(model, logs_dir, checkpoints_dir, print_every, batch_size, learning_rate, epochs, tokenizer, device, d_model)
 
     def before_epoch(self, epoch):
         if self.loader is None:
@@ -287,11 +289,12 @@ class BERTTrainerPreprocessedDatasets(BERTTrainer):
                  dataset_dir: Path,
                  dataset_pattern: str,
                  eval_pattern: str,
+                 d_model: int,
             ):
         self.dataset_dir = dataset_dir
         self.dataset_pattern = dataset_pattern
         self.eval_pattern = eval_pattern
-        super().__init__(model, logs_dir, checkpoints_dir, print_every, batch_size, learning_rate, epochs, tokenizer, device)
+        super().__init__(model, logs_dir, checkpoints_dir, print_every, batch_size, learning_rate, epochs, tokenizer, device, d_model)
 
 
     def before_epoch(self, epoch):
