@@ -4,3 +4,4 @@ tokenizers
 tensorboard
 msgpack
 torch-tb-profiler
+configargparse

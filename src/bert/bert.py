@@ -8,7 +8,7 @@ class BERT(torch.nn.Module):
     BERT model : Bidirectional Encoder Representations from Transformers.
     """
 
-    def __init__(self, vocab_size, d_model, n_layers, heads, dropout, max_len):
+    def __init__(self, vocab_size, d_model, n_layers, heads, dropout, seq_len):
         """
         :param vocab_size: vocab_size of total words
         :param hidden: BERT model hidden size
@@ -16,13 +16,13 @@ class BERT(torch.nn.Module):
         :param attn_heads: number of attention heads
         :param dropout: dropout rate
         """
-        print(f"BERT: vocab_size: {vocab_size}, d_model: {d_model}, n_layers: {n_layers}, heads: {heads}, dropout: {dropout}")  
+        print(f"BERT: vocab_size: {vocab_size}, d_model: {d_model}, n_layers: {n_layers}, heads: {heads}, dropout: {dropout}")
 
         super().__init__()
         self.d_model = d_model
         self.n_layers = n_layers
         self.heads = heads
-        self.max_len = max_len
+        self.max_len = seq_len
 
         # paper noted they used 4 * hidden_size for ff_network_hidden_size
         self.feed_forward_hidden = d_model * 4

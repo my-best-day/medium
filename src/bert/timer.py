@@ -23,7 +23,7 @@ def _time() is used internally to provide the time based on optional flag provid
 'process' - time.process_time()
 'wall' - time.time()
 
-which one should be the default? 
+which one should be the default?
 
 """
 import time
@@ -35,11 +35,15 @@ class Timer:
         self._time_type = time
         self._start_time = self._time()
 
-    def step(self, title: Optional[str] = None, restart: bool = False) -> str:
+    def elapsed(self, restart: bool = False) -> float:
         now = self._time()
-        elapsed = now - self._start_time        
+        elapsed = now - self._start_time
         if restart:
             self._start_time = now
+        return elapsed
+
+    def step(self, title: Optional[str] = None, restart: bool = False) -> str:
+        elapsed = self.elapsed(restart)
         return self._format(title, elapsed)
 
     def restart(self, title: Optional[str] = None) -> str:
@@ -86,4 +90,3 @@ def _main():
 
 if __name__ == '__main__':
     _main()
-

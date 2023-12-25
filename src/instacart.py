@@ -51,7 +51,7 @@ def _main(args, base_dir: Path):
         n_layers=N_LAYER,
         heads=HEADS,
         dropout=DROPOUT,
-        max_len=MAX_LEN
+        seq_len=MAX_LEN
     )
 
     bert_lm = BERTLM(bert_model, len(tokenizer.vocab))
