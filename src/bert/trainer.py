@@ -78,6 +78,7 @@ class BERTTrainer:
             mlm_out = self.model(sentence)
 
             eval_flag = (i + 1) % self.config.train.val_interval == 0
+            val_flag = (i + 1) % (self.config.train.val_interval * 2) == 0
             if False and val_flag:
                 # import numpy as np
                 # np.set_printoptions(formatter={'float': '{:0.2f}'.format})
@@ -99,7 +100,7 @@ class BERTTrainer:
             # self.optimizer_schedule.step_and_update_lr()
 
             if eval_flag:
-                if epoch % 2 == 1:
+                if val_flag:
                     self.training_summary(losses, val_loader)
                 else:
                     self.training_summary(losses, None) # , val_loader)
