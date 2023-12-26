@@ -24,7 +24,7 @@ class BERTDatasetPrecached(Dataset):
                 self.cached_data = msgpack.unpackb(packed_data, raw=False)
             else:
                 raise ValueError(f"Unknown file type: {path}")
-        timer.print(f"loaded precached dataset {path}")
+        logging.info(timer.step(f"loaded precached dataset {path}"))
 
     def __len__(self):
         if self._type == 0:
@@ -33,7 +33,7 @@ class BERTDatasetPrecached(Dataset):
             return len(self.cached_data) // 2
         else:
             raise ValueError(f"Unknown type: {self._type}")
-    
+
     def __getitem__(self, index):
         if self._type == 0:
             return self.cached_data[index]['bert_input'], self.cached_data[index]['bert_label']
@@ -44,7 +44,7 @@ class BERTDatasetPrecached(Dataset):
             labels = torch.tensor(l_labels, dtype=torch.int64)
             del l_sentence
             del l_labels
-            return sentence, labels        
+            return sentence, labels
         else:
             raise ValueError(f"Unknown type: {self._type}")
 
@@ -62,7 +62,7 @@ class BERTDataset(Dataset):
     def __getitem__(self, index):
 
         # Step 1: get random sentence pair
-        line = self.lines[index] 
+        line = self.lines[index]
 
         # Step 2: replace random words in sentence with mask / random words
         sentence, label = self.random_word2(line)
