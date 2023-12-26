@@ -1,6 +1,7 @@
 import glob
 import time
 import torch
+import logging
 import datetime
 from pathlib import Path
 from bert.bert import BERT
@@ -62,7 +63,7 @@ class BERTTrainer:
             self.save_checkpoint(self.epoch + 1, -1, loss)
 
     def train_epoch(self, epoch):
-        print(f"Begin epoch {epoch}")
+        logging.info(f"Begin epoch {epoch}")
 
         loader, val_loader = self.before_epoch(epoch)
 
@@ -115,7 +116,8 @@ class BERTTrainer:
         loss = sum(losses[-n:]) / n
         timer = Timer("val loss")
         val_loss = self.val_loss(val_loader)
-        timer.print()
+        if self.config.run.is_primary:
+            logging.info(timer.step())
 
         # if we are in DDP, we need to average the loss across all processes
         if self.config.run.parallel_mode == 'ddp':
@@ -140,15 +142,13 @@ class BERTTrainer:
         if val_loss is not None:
             items.append(f"Eval loss: {val_loss:6.2f}")
 
-        if not torch.cuda.is_available() or torch.cuda.current_device() == 0:
+        if self.config.run.is_primary:
             self.writer.add_scalar("loss", loss, global_step=global_step)
             if val_loss is not None:
                 self.writer.add_scalar("val_loss", val_loss, global_step=global_step)
 
         text = " | ".join(items)
-        print("-" * 70)
-        print(text)
-        print("-" * 70)
+        logging.info("\n".join(["-" * 70, text, "-" * 70]))
 
 
     def val_loss(self, loader):
@@ -180,7 +180,7 @@ class BERTTrainer:
 
     def save_checkpoint(self, epoch: int, index: int, loss: float):
         # skip checkpoint if this is not the main process
-        if torch.cuda.is_available() and torch.cuda.current_device() != 0:
+        if not self.config.run.is_primary:
             return
 
         is_wrapped = self.is_model_wrapped()
@@ -203,14 +203,14 @@ class BERTTrainer:
             "=" * 70,
             ""
         ])
-        print(text)
+        logging.info(text)
 
 
     def load_checkpoint(self):
         path = Path(self.config.train.checkpoint)
         if not path.exists():
             raise ValueError(f"Checkpoint {path} does not exist.")
-        print(f"Restoring model {path}")
+        logging.info(f"Restoring model {path}")
 
         # use map_location='cpu' if GPU memory an issue (broadcasting required in that case!)
         checkpoint = torch.load(path, map_location=self.config.run.device)
@@ -229,9 +229,9 @@ class BERTTrainer:
             for param in self.model.parameters():
                 torch.distributed.broadcast(param.data, src=0)
 
-        print("=" * 70)
-        print("Model is restored.")
-        print("=" * 70)
+        logging.info("=" * 70)
+        logging.info("Model is restored.")
+        logging.info("=" * 70)
 
     def is_model_wrapped(self):
         result = self.config.run.parallel_mode in ('dp', 'ddp')
@@ -313,7 +313,7 @@ class BERTTrainerPreprocessedDatasets(BERTTrainer):
         dataset_files = sorted(dataset_files)
         dataset_file = dataset_files[epoch % len(dataset_files)]
 
-        print(f"Epoch: {epoch} - Loading dataset from {dataset_file}")
+        logging.info(f"Epoch: {epoch} - Loading dataset from {dataset_file}")
 
         dataset = BERTDatasetPrecached(dataset_file)
         return dataset

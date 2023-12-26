@@ -1,5 +1,6 @@
 import os
 import torch
+import logging
 import configargparse
 from pathlib import Path
 
@@ -8,30 +9,7 @@ from utils.config import RunConfig, TrainConfig, ModelConfig, Config
 class Start:
     def __init__(self, config):
         self.config = config
-        self.init_mode_set_device()
-
-    def init_mode_set_device(self):
-        """
-        Initialize parallel mode and device.
-        Sets config.run.device
-        """
-        config = self.config
-        parallel_mode = config.run.parallel_mode
-        if parallel_mode == 'single':
-            config.run.device = 'cuda' if torch.cuda.is_available() else 'cpu'
-        elif parallel_mode == 'dp':
-            if not torch.cuda.is_available() or torch.cuda.device_count() < 2:
-                raise RuntimeError('DataParallel training requires multiple GPUs.')
-            config.run.device = 'cuda' if torch.cuda.is_available() else 'cpu'
-        elif parallel_mode == 'ddp':
-            os.environ['MASTER_ADDR'] = config.run.dist_master_addr
-            os.environ['MASTER_PORT'] = config.run.dist_master_port
-            torch.cuda.set_device(config.run.local_rank)
-            config.run.device = torch.device('cuda', torch.cuda.current_device())
-            torch.distributed.init_process_group(backend=config.run.dist_backend, init_method='env://')
-        else:
-            raise Exception(f'Unknown parallel mode {parallel_mode}. Valid values are single, dp, ddp.')
-
+        # self.init_mode_set_device()
 
     def train(self):
         self.tokenizer = self.get_tokenizer()
@@ -40,7 +18,7 @@ class Start:
         self.model = self.wrap_model(model)
 
         total_parameters = sum([p.nelement() for p in self.model.parameters()])
-        print(f"Total Parameters: {total_parameters:,}")
+        logging.info(f"Total Parameters: {total_parameters:,}")
 
         self.trainer = self.get_trainer()
         if self.config.train.checkpoint is not None:
@@ -245,16 +223,64 @@ def get_config_objects(args):
     )
     return config
 
+def init_mode_set_device(config):
+    """
+    Initialize parallel mode and device.
+    Sets config.run.device
+    """
+    parallel_mode = config.run.parallel_mode
+    if parallel_mode == 'single':
+        config.run.device = 'cuda' if torch.cuda.is_available() else 'cpu'
+    elif parallel_mode == 'dp':
+        if not torch.cuda.is_available() or torch.cuda.device_count() < 2:
+            raise RuntimeError('DataParallel training requires multiple GPUs.')
+        config.run.device = 'cuda' if torch.cuda.is_available() else 'cpu'
+    elif parallel_mode == 'ddp':
+        os.environ['MASTER_ADDR'] = config.run.dist_master_addr
+        os.environ['MASTER_PORT'] = config.run.dist_master_port
+        torch.cuda.set_device(config.run.local_rank)
+        config.run.device = torch.device('cuda', torch.cuda.current_device())
+        torch.distributed.init_process_group(backend=config.run.dist_backend, init_method='env://')
+    else:
+        raise Exception(f'Unknown parallel mode {parallel_mode}. Valid values are single, dp, ddp.')
+    # this is the primary node if we are using the first gpu or if we are not using gpus
+    config.run.is_primary = not torch.cuda.is_available() or torch.cuda.current_device() == 0
 
 def _main():
     args = get_args()
     config = get_config_objects(args)
-    print(config.model)
-    print(config.train)
-    print(config.run)
+    init_mode_set_device(config)
+
+    config_logging_file(config)
+
+    if config.run.is_primary:
+        logging.info(config.model)
+        logging.info(config.train)
+        logging.info(config.run)
     start = Start(config)
     start.train()
 
 
+def config_logging():
+    """
+    configure the base logger, prints to console
+    """
+    logger = logging.getLogger()
+    logger.setLevel(logging.INFO)
+
+    console_handler = logging.StreamHandler()
+    console_handler.setLevel(logging.INFO)
+    logger.addHandler(console_handler)
+
+def config_logging_file(config):
+    """
+    extends the base logger, add a log file
+    """
+    logger = logging.getLogger()
+    file_handler = logging.FileHandler(config.run.logs_dir / 'logfile.log')
+    file_handler.setLevel(logging.INFO)
+    logger.addHandler(file_handler)
+
 if __name__ == '__main__':
+    config_logging()
     _main()

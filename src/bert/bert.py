@@ -1,5 +1,5 @@
 import torch
-
+import logging
 from bert.encoder_layer import EncoderLayer
 from bert.embedding import BERTEmbedding
 
@@ -16,7 +16,7 @@ class BERT(torch.nn.Module):
         :param attn_heads: number of attention heads
         :param dropout: dropout rate
         """
-        print(f"BERT: vocab_size: {vocab_size}, d_model: {d_model}, n_layers: {n_layers}, heads: {heads}, dropout: {dropout}")
+        logging.info(f"BERT: vocab_size: {vocab_size}, d_model: {d_model}, n_layers: {n_layers}, heads: {heads}, dropout: {dropout}")
 
         super().__init__()
         self.d_model = d_model
