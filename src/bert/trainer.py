@@ -207,18 +207,17 @@ class BERTTrainer:
 
 
     def load_checkpoint(self):
-        print(f"Restoring model {path}")
-
         path = Path(self.config.train.checkpoint)
         if not path.exists():
             raise ValueError(f"Checkpoint {path} does not exist.")
+        print(f"Restoring model {path}")
 
         # use map_location='cpu' if GPU memory an issue (broadcasting required in that case!)
         checkpoint = torch.load(path, map_location=self.config.run.device)
 
         version = checkpoint.get('version', 0)
-        self.config.train.start_epoch = self.epoch
         self.epoch = checkpoint['epoch'] + (1 if version == 0 else 0)
+        self.config.train.start_epoch = self.epoch
 
         is_wrapped = self.is_model_wrapped()
         # in DDP, load state dict into the underlying model, otherwise, load it directly

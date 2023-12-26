@@ -191,8 +191,10 @@ def get_args() -> configargparse.Namespace:
         if args.local_rank > torch.cuda.device_count():
             parser.error(f'Invalid local rank {args.local_rank}. Must be < number of GPUs.')
 
-    if args.checkpoint is not None and not args.checkpoint.exists():
-        parser.error(f'Checkpoint {args.checkpoint} does not exist.')
+    if args.checkpoint is not None:
+        args.checkpoint = Path(args.checkpoint)
+        if not args.checkpoint.exists():
+            parser.error(f'Checkpoint {args.checkpoint} does not exist.')
 
     return args
 
