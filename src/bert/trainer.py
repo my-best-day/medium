@@ -138,14 +138,18 @@ class BERTTrainer:
                 torch.distributed.all_reduce(val_loss)
                 val_loss = val_loss.item() / torch.distributed.get_world_size()
 
-        passed = len(losses) / self.batch_count
-        global_step = self.epoch * self.batch_count + len(losses)
+        n_losses = len(losses)
+        if self.config.run.parallel_mode == 'ddp':
+            n_losses *= torch.distributed.get_world_size()
+        passed = n_losses / self.batch_count
+        global_step = self.epoch * self.batch_count + n_losses
+
         elapsed = self.train_timer.elapsed()
         items = [
             time.strftime('%H:%M:%S', time.gmtime(elapsed)),
             f"(r:{self.estimate_remaining_time(passed, elapsed)})",
             f"Epocn {self.epoch}",
-            f"{len(losses)} / {self.batch_count} ({passed:6.2%})",
+            f"{n_losses} / {self.batch_count} ({passed:6.2%})",
             f"loss: {loss:6.2f}",
         ]
         if val_loss is not None:
