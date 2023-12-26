@@ -112,6 +112,7 @@ def get_args() -> configargparse.Namespace:
     parser.add_argument('--end-epoch', '--ee', type=int, default=19, help='Epoch to end training')
     parser.add_argument('--dataset-pattern', type=str, default=None, help='Dataset pattern')
     parser.add_argument('--val-dataset-pattern', type=str, default=None, help='Validation pattern')
+    parser.add_argument('--max-checkpoints', type=int, default=5, help='Maximum number of checkpoints to keep.')
 
     # run arguments
     parser.add_argument('--base-dir', type=str, default='.', help='Base directory for logs and checkpoints.')
@@ -204,6 +205,7 @@ def get_config_objects(args):
         learning_rate=args.learning_rate,
         dataset_pattern=args.dataset_pattern,
         val_dataset_pattern=args.val_dataset_pattern,
+        max_checkpoints=args.max_checkpoints,
     )
     run_config = RunConfig(
         base_dir = args.base_dir,
@@ -263,10 +265,9 @@ def _main():
     try:
         start = Start(config)
         start.train()
-    except error as e:
-        logging.error(e)
+    except Exception as e:
+        logging.exception(e)
         raise e
-
 
 def config_logging(config):
     """

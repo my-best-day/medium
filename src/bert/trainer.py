@@ -1,6 +1,7 @@
 import glob
 import time
 import torch
+import natsort
 import logging
 import datetime
 from pathlib import Path
@@ -98,7 +99,10 @@ class BERTTrainer:
             # self.optimizer_schedule.step_and_update_lr()
 
             if eval_flag:
-                self.training_summary(losses, val_loader)
+                if epoch % 2 == 1:
+                    self.training_summary(losses, val_loader)
+                else:
+                    self.training_summary(losses, None) # , val_loader)
 
         self.training_summary(losses, val_loader)
 
@@ -114,20 +118,24 @@ class BERTTrainer:
 
         # average over the last n batches
         loss = sum(losses[-n:]) / n
-        timer = Timer("val loss")
-        val_loss = self.val_loss(val_loader)
-        if self.config.run.is_primary:
-            logging.info(timer.step())
-
-        # if we are in DDP, we need to average the loss across all processes
         if self.config.run.parallel_mode == 'ddp':
-            val_loss = torch.tensor(val_loss).to(self.config.run.device)
-            torch.distributed.all_reduce(val_loss)
-            val_loss = val_loss.item() / torch.distributed.get_world_size()
-
             loss = torch.tensor(loss).to(self.config.run.device)
             torch.distributed.all_reduce(loss)
             loss = loss.item() / torch.distributed.get_world_size()
+
+        if val_loader is None:
+            val_loss = None
+        else:
+            timer = Timer("val loss")
+            val_loss = self.val_loss(val_loader)
+            if self.config.run.is_primary:
+                logging.info(timer.step())
+
+            # if we are in DDP, we need to average the loss across all processes
+            if self.config.run.parallel_mode == 'ddp':
+                val_loss = torch.tensor(val_loss).to(self.config.run.device)
+                torch.distributed.all_reduce(val_loss)
+                val_loss = val_loss.item() / torch.distributed.get_world_size()
 
         passed = len(losses) / self.batch_count
         global_step = self.epoch * self.batch_count + len(losses)
@@ -196,6 +204,13 @@ class BERTTrainer:
             'optimizer_state_dict': self.optimizer.state_dict(),
             'loss': loss
         }, self.config.run.checkpoints_dir / name)
+
+        # remove old checkpoints
+
+        checkpoints = natsort.natsorted(self.config.run.checkpoints_dir.glob("*.pt"))
+        if len(checkpoints) > self.config.train.max_checkpoints:
+            for checkpoint in checkpoints[:-self.config.train.max_checkpoints]:
+                checkpoint.unlink()
 
         text = "\n".join([
             "",

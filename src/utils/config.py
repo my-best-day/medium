@@ -22,6 +22,7 @@ class TrainConfig:
     val_dataset_pattern: str
     checkpoint: Path = None
     learning_rate: float = None
+    max_checkpoints: int = None
 
     def __post_init__(self):
         if self.start_epoch < 0:
@@ -32,6 +33,10 @@ class TrainConfig:
 
         if self.start_epoch > self.end_epoch:
             raise Exception(f'Invalid start epoch {self.start_epoch} and end epoch {self.end_epoch}. Start epoch must be <= end epoch.')
+
+        # max_checkpoints at least 1
+        if self.max_checkpoints < 1:
+            raise Exception(f'Invalid max checkpoints {self.max_checkpoints}. Must be >= 1.')
 
         if self.checkpoint is not None and not self.checkpoint.exists():
             raise Exception(f'Checkpoint {self.checkpoint} does not exist.')
