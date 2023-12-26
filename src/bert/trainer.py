@@ -148,7 +148,8 @@ class BERTTrainer:
                 self.writer.add_scalar("val_loss", val_loss, global_step=global_step)
 
         text = " | ".join(items)
-        logging.info("\n".join(["-" * 70, text, "-" * 70]))
+        logging.info(text)
+        # logging.info("\n".join(["-" * 70, text, "-" * 70]))
 
 
     def val_loss(self, loader):

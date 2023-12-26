@@ -240,7 +240,6 @@ def init_mode_set_device(config):
         os.environ['MASTER_PORT'] = config.run.dist_master_port
         torch.cuda.set_device(config.run.local_rank)
         config.run.device = torch.device('cuda', torch.cuda.current_device())
-        torch.distributed.init_process_group(backend=config.run.dist_backend, init_method='env://')
     else:
         raise Exception(f'Unknown parallel mode {parallel_mode}. Valid values are single, dp, ddp.')
     # this is the primary node if we are using the first gpu or if we are not using gpus
@@ -251,36 +250,44 @@ def _main():
     config = get_config_objects(args)
     init_mode_set_device(config)
 
-    config_logging_file(config)
+    config_logging(config)
 
     if config.run.is_primary:
         logging.info(config.model)
         logging.info(config.train)
         logging.info(config.run)
-    start = Start(config)
-    start.train()
+
+    if config.run.parallel_mode == 'ddp':
+        torch.distributed.init_process_group(backend=config.run.dist_backend, init_method='env://')
+
+    try:
+        start = Start(config)
+        start.train()
+    except error as e:
+        logging.error(e)
+        raise e
 
 
-def config_logging():
+def config_logging(config):
     """
-    configure the base logger, prints to console
+    configure the base logger, prints to console and file
     """
     logger = logging.getLogger()
     logger.setLevel(logging.INFO)
 
+    # on the console, skip the date. log time, level, and message
+    console_formatter = logging.Formatter('%(asctime)s %(levelname)s: %(message)s', datefmt='%H:%M:%S')
     console_handler = logging.StreamHandler()
     console_handler.setLevel(logging.INFO)
+    console_handler.setFormatter(console_formatter)
     logger.addHandler(console_handler)
 
-def config_logging_file(config):
-    """
-    extends the base logger, add a log file
-    """
-    logger = logging.getLogger()
+    # to the log file, also include the date
+    file_formatter = logging.Formatter('%(asctime)s %(levelname)s: %(message)s', datefmt='%Y-%m-%d %H:%M:%S')
     file_handler = logging.FileHandler(config.run.logs_dir / 'logfile.log')
     file_handler.setLevel(logging.INFO)
+    file_handler.setFormatter(file_formatter)
     logger.addHandler(file_handler)
 
 if __name__ == '__main__':
-    config_logging()
     _main()

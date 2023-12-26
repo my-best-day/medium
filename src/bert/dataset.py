@@ -4,6 +4,7 @@ import torch
 import random
 import pickle
 import msgpack
+import logging
 import itertools
 from torch.utils.data import Dataset
 
@@ -12,7 +13,7 @@ from bert.timer import Timer
 class BERTDatasetPrecached(Dataset):
     def __init__(self, path):
         self._type = None
-        timer = Timer("load precached dataset")
+        # timer = Timer("load precached dataset")
         opener = gzip.open if path.endswith('.gz') else open
         with opener(path, 'rb') as f:
             if re.search(r'\.pkl(\.gz)?$', path):
@@ -24,7 +25,7 @@ class BERTDatasetPrecached(Dataset):
                 self.cached_data = msgpack.unpackb(packed_data, raw=False)
             else:
                 raise ValueError(f"Unknown file type: {path}")
-        logging.info(timer.step(f"loaded precached dataset {path}"))
+        # logging.info(timer.step(f"loaded precached dataset {path}"))
 
     def __len__(self):
         if self._type == 0:
