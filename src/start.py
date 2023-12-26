@@ -22,6 +22,7 @@ class Start:
         elif parallel_mode == 'dp':
             if not torch.cuda.is_available() or torch.cuda.device_count() < 2:
                 raise RuntimeError('DataParallel training requires multiple GPUs.')
+            config.run.device = 'cuda' if torch.cuda.is_available() else 'cpu'
         elif parallel_mode == 'ddp':
             os.environ['MASTER_ADDR'] = config.run.dist_master_addr
             os.environ['MASTER_PORT'] = config.run.dist_master_port
@@ -179,6 +180,8 @@ def get_args() -> configargparse.Namespace:
         args.run_id = get_next_run_id(args.base_dir / 'runs')
 
     if args.parallel_mode == 'ddp':
+        if args.local_rank is None and 'LOCAL_RANK' in os.environ:
+            args.local_rank = int(os.environ['LOCAL_RANK'])
         if args.local_rank is None:
             parser.error('Local rank must be specified when using DDP.')
 
@@ -244,7 +247,9 @@ def get_config_objects(args):
 def _main():
     args = get_args()
     config = get_config_objects(args)
-    print(config)
+    print(config.model)
+    print(config.train)
+    print(config.run)
     start = Start(config)
     start.train()
 

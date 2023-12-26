@@ -140,9 +140,10 @@ class BERTTrainer:
         if val_loss is not None:
             items.append(f"Eval loss: {val_loss:6.2f}")
 
-        self.writer.add_scalar("loss", loss, global_step=global_step)
-        if val_loss is not None:
-            self.writer.add_scalar("val_loss", val_loss, global_step=global_step)
+        if not torch.cuda.is_available() or torch.cuda.current_device() == 0:
+            self.writer.add_scalar("loss", loss, global_step=global_step)
+            if val_loss is not None:
+                self.writer.add_scalar("val_loss", val_loss, global_step=global_step)
 
         text = " | ".join(items)
         print("-" * 70)
