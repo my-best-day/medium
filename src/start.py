@@ -12,10 +12,15 @@ class Start:
         # self.init_mode_set_device()
 
     def train(self):
+        logging.debug("loading tokenizer")
         self.tokenizer = self.get_tokenizer()
+        logging.debug("got tokenizer")
 
+        logging.debug("getting model")
         model = self.get_model(self.tokenizer)
+        logging.debug("wrapping model")
         self.model = self.wrap_model(model)
+        logging.debug("wrapped model")
 
         total_parameters = sum([p.nelement() for p in self.model.parameters()])
         logging.info(f"Total Parameters: {total_parameters:,}")
@@ -68,7 +73,9 @@ class Start:
         elif mode == 'dp':
             model = torch.nn.DataParallel(model)
         elif mode == 'ddp':
+            logging.debug(f'wrap_model, mode is {mode}, local_rank is {self.config.run.local_rank}')
             model = torch.nn.parallel.DistributedDataParallel(model, device_ids=[self.config.run.local_rank])
+            logging.debug("wrap_model: model wrapped")
         else:
             raise Exception(f'Unknown parallel mode {mode}. Valid values are single, dp, ddp.')
         return model
@@ -263,8 +270,11 @@ def _main():
         torch.distributed.init_process_group(backend=config.run.dist_backend, init_method='env://')
 
     try:
+        logging.debug("creating start")
         start = Start(config)
+        logging.debug("created start")
         start.train()
+        logging.debug("done training")
     except Exception as e:
         logging.exception(e)
         raise e
@@ -274,12 +284,12 @@ def config_logging(config):
     configure the base logger, prints to console and file
     """
     logger = logging.getLogger()
-    logger.setLevel(logging.INFO)
+    logger.setLevel(logging.DEBUG)
 
     # on the console, skip the date. log time, level, and message
     console_formatter = logging.Formatter('%(asctime)s %(levelname)s: %(message)s', datefmt='%H:%M:%S')
     console_handler = logging.StreamHandler()
-    console_handler.setLevel(logging.INFO)
+    console_handler.setLevel(logging.DEBUG)
     console_handler.setFormatter(console_formatter)
     logger.addHandler(console_handler)
 
