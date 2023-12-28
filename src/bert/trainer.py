@@ -10,6 +10,7 @@ from torch.utils.data import Dataset
 from torch.utils.data import DataLoader
 from torch.utils.tensorboard import SummaryWriter
 from bert.dump_sentences import DumpStentences
+from bert.lrsched import LRScheduler
 from bert.scheduled_optim import ScheduledOptim
 from torch.utils.data.distributed import DistributedSampler
 
@@ -42,6 +43,7 @@ class BERTTrainer:
             betas=betas,
             weight_decay=weight_decay
         )
+        self.lrsched = LRScheduler(self.optimizer)
         # self.optimizer_schedule = ScheduledOptim(self.optimizer, config.model.d_model, n_warmup_steps=10000)
 
         self._writer = None
@@ -62,6 +64,7 @@ class BERTTrainer:
         for self.epoch in range(self.config.train.start_epoch, self.config.train.end_epoch+1):
             loss = self.train_epoch(self.epoch)
             self.save_checkpoint(self.epoch + 1, -1, loss)
+            self.lrsched.step(self.epoch)
 
     def train_epoch(self, epoch):
         logging.info(f"Begin epoch {epoch}")
@@ -140,9 +143,14 @@ class BERTTrainer:
 
         n_losses = len(losses)
         if self.config.run.parallel_mode == 'ddp':
+
+            global_step = (self.epoch * self.batch_count + n_losses) * torch.distributed.get_world_size()
             n_losses *= torch.distributed.get_world_size()
+        else:
+            global_step = self.epoch * self.batch_count + n_losses
+        global_step *= self.config.train.batch_size
+
         passed = n_losses / self.batch_count
-        global_step = self.epoch * self.batch_count + n_losses
 
         elapsed = self.train_timer.elapsed()
         items = [
