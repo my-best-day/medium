@@ -10,7 +10,7 @@ from torch.utils.data import Dataset
 from torch.utils.data import DataLoader
 from torch.utils.tensorboard import SummaryWriter
 from bert.dump_sentences import DumpStentences
-from bert.lrsched import LRScheduler
+# from bert.lrsched import LRScheduler
 from bert.scheduled_optim import ScheduledOptim
 from torch.utils.data.distributed import DistributedSampler
 
@@ -43,7 +43,7 @@ class BERTTrainer:
             betas=betas,
             weight_decay=weight_decay
         )
-        self.lrsched = LRScheduler(self.optimizer)
+        # self.lrsched = LRScheduler(self.optimizer)
         # self.optimizer_schedule = ScheduledOptim(self.optimizer, config.model.d_model, n_warmup_steps=10000)
 
         self._writer = None
@@ -64,7 +64,7 @@ class BERTTrainer:
         for self.epoch in range(self.config.train.start_epoch, self.config.train.end_epoch+1):
             loss = self.train_epoch(self.epoch)
             self.save_checkpoint(self.epoch + 1, -1, loss)
-            self.lrsched.step(self.epoch)
+            # self.lrsched.step(self.epoch)
 
     def train_epoch(self, epoch):
         logging.info(f"Begin epoch {epoch}")
@@ -114,7 +114,7 @@ class BERTTrainer:
 
     def training_summary(self, losses, val_loader=None):
         # minimum number of batches before we start printing summary
-        n = self.config.train.val_interval // 2
+        n = 4 # self.config.train.val_interval // 2
 
         # skip summary if
         if len(losses) < n:
