@@ -59,10 +59,12 @@ class BERTTrainer:
         pass
 
     def train(self):
+        timer = Timer("epoch time")
         for self.epoch in range(self.config.train.start_epoch, self.config.train.end_epoch+1):
             loss = self.train_epoch(self.epoch)
             self.save_checkpoint(self.epoch + 1, -1, loss)
             self.lr_sched.step()
+            logging.info(timer.step(f"Epoch {self.epoch}", restart=True))
 
     def train_epoch(self, epoch):
         logging.info(f"Begin epoch {epoch}")
@@ -79,7 +81,7 @@ class BERTTrainer:
             mlm_out = self.model(sentence)
 
             eval_flag = (i + 1) % self.config.train.val_interval == 0
-            val_flag = (i + 1) % (self.config.train.val_interval * 2) == 0
+            val_flag = False # (i + 1) % (self.config.train.val_interval * 2) == 0
             if False and val_flag:
                 # import numpy as np
                 # np.set_printoptions(formatter={'float': '{:0.2f}'.format})
@@ -97,7 +99,6 @@ class BERTTrainer:
             loss.backward()
 
             self.optimizer.step()
-            # self.optimizer_schedule.step_and_update_lr()
 
             if eval_flag:
                 if val_flag:
@@ -265,7 +266,7 @@ class BERTTrainer:
 
 
 class LRSchedulerNoop:
-    def step():
+    def step(self):
         pass
 
 def get_lr_scheduler(optimizer, lr_scheduler_arg):
