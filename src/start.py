@@ -98,7 +98,7 @@ def get_args() -> configargparse.Namespace:
     # Create the parser
     parser = configargparse.ArgumentParser(
         description="Process arguments for training.",
-        default_config_files=['./config.ini'],
+        default_config_files=['./config.ini', './local_config.ini'],
     )
 
     # Add arguments
@@ -120,6 +120,7 @@ def get_args() -> configargparse.Namespace:
     parser.add_argument('--dataset-pattern', type=str, default=None, help='Dataset pattern')
     parser.add_argument('--val-dataset-pattern', type=str, default=None, help='Validation pattern')
     parser.add_argument('--max-checkpoints', type=int, default=5, help='Maximum number of checkpoints to keep.')
+    parser.add_argument('--lr-scheduler', type=str, default=None, help='Learning rate scheduler')
 
     # run arguments
     parser.add_argument('--base-dir', type=str, default='.', help='Base directory for logs and checkpoints.')
@@ -177,6 +178,9 @@ def get_args() -> configargparse.Namespace:
         if args.local_rank > torch.cuda.device_count():
             parser.error(f'Invalid local rank {args.local_rank}. Must be < number of GPUs.')
 
+    if args.lr_scheduler == 'none':
+        args.lr_scheduler = None
+
     if args.checkpoint is not None:
         args.checkpoint = Path(args.checkpoint)
         if not args.checkpoint.exists():
@@ -213,6 +217,7 @@ def get_config_objects(args):
         dataset_pattern=args.dataset_pattern,
         val_dataset_pattern=args.val_dataset_pattern,
         max_checkpoints=args.max_checkpoints,
+        lr_scheduler=args.lr_scheduler,
     )
     run_config = RunConfig(
         base_dir = args.base_dir,

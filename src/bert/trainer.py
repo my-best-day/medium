@@ -10,7 +10,6 @@ from torch.utils.data import Dataset
 from torch.utils.data import DataLoader
 from torch.utils.tensorboard import SummaryWriter
 from bert.dump_sentences import DumpStentences
-from bert.lrsched import LRScheduler
 from bert.scheduled_optim import ScheduledOptim
 from torch.utils.data.distributed import DistributedSampler
 
@@ -43,8 +42,7 @@ class BERTTrainer:
             betas=betas,
             weight_decay=weight_decay
         )
-        self.lrsched = LRScheduler(self.optimizer)
-        # self.optimizer_schedule = ScheduledOptim(self.optimizer, config.model.d_model, n_warmup_steps=10000)
+        self.lr_sched = get_lr_scheduler(self.optimizer, self.config.train.lr_scheduler)
 
         self._writer = None
 
@@ -64,7 +62,7 @@ class BERTTrainer:
         for self.epoch in range(self.config.train.start_epoch, self.config.train.end_epoch+1):
             loss = self.train_epoch(self.epoch)
             self.save_checkpoint(self.epoch + 1, -1, loss)
-            self.lrsched.step(self.epoch)
+            self.lr_sched.step()
 
     def train_epoch(self, epoch):
         logging.info(f"Begin epoch {epoch}")
@@ -96,7 +94,6 @@ class BERTTrainer:
             losses.append(loss.item())
 
             self.optimizer.zero_grad()
-            # self.optimizer_schedule.zero_grad()
             loss.backward()
 
             self.optimizer.step()
@@ -265,6 +262,24 @@ class BERTTrainer:
     def is_model_wrapped(self):
         result = self.config.run.parallel_mode in ('dp', 'ddp')
         return result
+
+
+class LRSchedulerNoop:
+    def step():
+        pass
+
+def get_lr_scheduler(optimizer, lr_scheduler_arg):
+    if lr_scheduler_arg is None:
+        return LRSchedulerNoop()
+    if lr_scheduler_arg.startswith('steplr'):
+        _, step_size, gamma = lr_scheduler_arg.split(':')
+        step_size = int(step_size)
+        gamma = float(gamma)
+        return torch.optim.lr_scheduler.StepLR(optimizer, step_size=step_size, gamma=gamma)
+    else:
+        raise Exception(f'Unknown learning rate scheduler {lr_scheduler_arg}. Valid values are warmup, cosine.')
+
+
 
 # class BERTTrainerSingleDataset(BERTTrainer):
 

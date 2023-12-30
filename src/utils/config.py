@@ -23,6 +23,7 @@ class TrainConfig:
     checkpoint: Path = None
     learning_rate: float = None
     max_checkpoints: int = None
+    lr_scheduler: str = None
 
     def __post_init__(self):
         if self.start_epoch < 0:

@@ -13,3 +13,4 @@ ignore
 .env
 settings.json
 config.ini
+local_config.ini
