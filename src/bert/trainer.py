@@ -60,7 +60,7 @@ class BERTTrainer:
 
     def train(self):
         timer = Timer("epoch time")
-        for self.epoch in range(self.config.train.start_epoch, self.config.train.end_epoch+1):
+        for self.epoch in range(self.config.train.start_epoch, self.config.train.end_epoch):
             loss = self.train_epoch(self.epoch)
             self.save_checkpoint(self.epoch + 1, -1, loss)
             self.lr_sched.step()
@@ -141,13 +141,13 @@ class BERTTrainer:
 
         n_losses = len(losses)
         if self.config.run.parallel_mode == 'ddp':
-
-            global_step = (self.epoch * self.batch_count + n_losses) * torch.distributed.get_world_size()
+            global_step = self.epoch * self.batch_count + n_losses * torch.distributed.get_world_size()
             n_losses *= torch.distributed.get_world_size()
         else:
             global_step = self.epoch * self.batch_count + n_losses
-        global_step *= self.config.train.batch_size
+        # global_step *= self.config.train.batch_size
 
+        n_losses = max(n_losses, self.batch_count)
         passed = n_losses / self.batch_count
 
         elapsed = self.train_timer.elapsed()
