@@ -111,7 +111,7 @@ class BERTTrainer:
 
     def training_summary(self, losses, val_loader=None):
         # minimum number of batches before we start printing summary
-        n = self.config.train.val_interval // 2
+        n = 4 # self.config.train.val_interval // 2
 
         # skip summary if
         if len(losses) < n:
