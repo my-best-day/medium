@@ -147,7 +147,7 @@ class BERTTrainer:
             global_step = self.epoch * self.batch_count + n_losses
         # global_step *= self.config.train.batch_size
 
-        n_losses = max(n_losses, self.batch_count)
+        n_losses = min(n_losses, self.batch_count)
         passed = n_losses / self.batch_count
 
         elapsed = self.train_timer.elapsed()
