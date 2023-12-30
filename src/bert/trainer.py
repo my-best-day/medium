@@ -33,7 +33,7 @@ class BERTTrainer:
 
         # TODO: add to args & config
         betas = (0.9, 0.999)
-        weight_decay = 0.015
+        weight_decay = 0.0
 
         self.criterion = torch.nn.NLLLoss(ignore_index=0).to(self.config.run.device)
         self.optimizer = torch.optim.Adam(
