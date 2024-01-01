@@ -61,10 +61,15 @@ class BERTTrainer:
     def train(self):
         timer = Timer("epoch time")
         for self.epoch in range(self.config.train.start_epoch, self.config.train.end_epoch):
+            if Path('./stop').exists():
+                Path('./stop').unlink()
+                logging.info("Stopping training because file './stop' exists.")
+                break
             loss = self.train_epoch(self.epoch)
             self.lr_sched.step()
             self.save_checkpoint(self.epoch + 1, -1, loss)
             logging.info(timer.step(f"Epoch {self.epoch}", restart=True))
+
 
     def train_epoch(self, epoch):
         current_lr = self.optimizer.param_groups[0]['lr']
