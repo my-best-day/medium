@@ -20,6 +20,7 @@ class TrainConfig:
     end_epoch: int
     dataset_pattern: str
     val_dataset_pattern: str
+    weight_decay: float
     checkpoint: Path = None
     learning_rate: float = None
     max_checkpoints: int = None
