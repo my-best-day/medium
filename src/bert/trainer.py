@@ -67,7 +67,8 @@ class BERTTrainer:
             logging.info(timer.step(f"Epoch {self.epoch}", restart=True))
 
     def train_epoch(self, epoch):
-        logging.info(f"Begin epoch {epoch}")
+        current_lr = self.optimizer.param_groups[0]['lr']
+        logging.info(f"Begin epoch {epoch} with learning rate {current_lr}")
 
         loader, val_loader = self.before_epoch(epoch)
 
@@ -208,11 +209,15 @@ class BERTTrainer:
         global_step = epoch * self.batch_count + index
         start_time = time.time()
         name = f"bert_epoch{epoch}_index{global_step}_{datetime.datetime.utcnow().timestamp():.0f}.pt"
+        # initial version save epoch - 1
+        # 0.1 fixed the epoch
+        # 0.2 added lr_sched state
         torch.save({
-            'version': 0.1,
+            'version': 0.2,
             'epoch': epoch,
             'model_state_dict': (self.model.module if is_wrapped else self.model).state_dict(),
             'optimizer_state_dict': self.optimizer.state_dict(),
+            'scheduler_state_dict': self.lr_sched.state_dict(),
             'loss': loss
         }, self.config.run.checkpoints_dir / name)
 
@@ -251,6 +256,9 @@ class BERTTrainer:
         (self.model.module if is_wrapped else self.model).load_state_dict(checkpoint['model_state_dict'])
 
         self.optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
+
+        if version >= 0.2:
+            self.lr_sched.load_state_dict(checkpoint['scheduler_state_dict'])
 
         if self.config.run.parallel_mode == 'ddp':
             for param in self.model.parameters():
