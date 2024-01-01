@@ -62,8 +62,8 @@ class BERTTrainer:
         timer = Timer("epoch time")
         for self.epoch in range(self.config.train.start_epoch, self.config.train.end_epoch):
             loss = self.train_epoch(self.epoch)
-            self.save_checkpoint(self.epoch + 1, -1, loss)
             self.lr_sched.step()
+            self.save_checkpoint(self.epoch + 1, -1, loss)
             logging.info(timer.step(f"Epoch {self.epoch}", restart=True))
 
     def train_epoch(self, epoch):
