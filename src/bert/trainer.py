@@ -62,7 +62,6 @@ class BERTTrainer:
         timer = Timer("epoch time")
         for self.epoch in range(self.config.train.start_epoch, self.config.train.end_epoch):
             if Path('./stop').exists():
-                Path('./stop').unlink()
                 logging.info("Stopping training because file './stop' exists.")
                 break
             loss = self.train_epoch(self.epoch)
@@ -191,6 +190,11 @@ class BERTTrainer:
                 loss = self.criterion(mlm_out.transpose(1, 2), labels)
 
                 losses.append(loss.item())
+
+                if i == 0:
+                    predicted = self.dump_sentences.batched_debug(sentence, labels, mlm_out)
+                    logging.info("\n".join(predicted[:20]))
+
         self.model.train()
         loss = sum(losses) / len(losses)
         return loss

@@ -15,7 +15,7 @@ class DumpStentences:
                 if any(element != 0 for element in labels[b]):
                     english = self.debug(sentence[b], labels[b], mlm_out[b])
                     text.append(english)
-                    if len(text) >= 10:
+                    if len(text) >= 20:
                         break
             return text
 
@@ -34,11 +34,11 @@ class DumpStentences:
         source = self.tokenizer.convert_ids_to_tokens(sentence2)
         source = self.convert_tokens_to_string(source)
         return f"{english}\n{source}"
-    
+
     def convert_id_to_token(self, id):
         token = self.tokenizer.convert_ids_to_tokens([id])[0]
         return token
-    
+
     def convert_tokens_to_string(self, tokens):
         import re
         text = self.tokenizer.convert_tokens_to_string(tokens)
