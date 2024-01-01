@@ -191,9 +191,9 @@ class BERTTrainer:
 
                 losses.append(loss.item())
 
-                if i == 0:
+                if i == 0 and self.config.run.case == 'movies' and (self.epoch + 1) % 10 == 0:
                     predicted = self.dump_sentences.batched_debug(sentence, labels, mlm_out)
-                    logging.info("\n".join(predicted[:20]))
+                    logging.info("\n".join(predicted[:30]))
 
         self.model.train()
         loss = sum(losses) / len(losses)

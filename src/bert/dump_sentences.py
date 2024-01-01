@@ -15,7 +15,7 @@ class DumpStentences:
                 if any(element != 0 for element in labels[b]):
                     english = self.debug(sentence[b], labels[b], mlm_out[b])
                     text.append(english)
-                    if len(text) >= 20:
+                    if len(text) >= 30:
                         break
             return text
 
