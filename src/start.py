@@ -101,10 +101,8 @@ def get_args() -> configargparse.Namespace:
         default_config_files=['./config.ini', './local_config.ini'],
     )
 
-    # Add arguments
     # model arguments
     parser.add_argument('--seq-len', type=int, default=None, help='Sequence length')
-    # parser.add_argument('--vocab-size', type=int, default=None, help='Vocabulary size')
     parser.add_argument('--d-model', type=int, default=None, help='Model dimension')
     parser.add_argument('--n-layers', type=int, default=None, help='Number of layers')
     parser.add_argument('--heads', type=int, default=None, help='Number of heads')
@@ -269,6 +267,7 @@ def _main():
     init_mode_set_device(config)
 
     config_logging(config)
+    config_wandb(config)
 
     if config.run.is_primary:
         logging.info(config.model)
@@ -287,6 +286,18 @@ def _main():
     except Exception as e:
         logging.exception(e)
         raise e
+
+def config_wandb(config):
+    """
+    configure wandb
+    """
+    import wandb
+    wandb.init(
+        project=config.run.case,
+        config=config.to_dict(),
+        name=f'run{config.run.run_id}',
+        dir=config.run.run_dir,
+    )
 
 def config_logging(config):
     """

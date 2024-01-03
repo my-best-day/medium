@@ -1,6 +1,7 @@
 import glob
 import time
 import torch
+import wandb
 import natsort
 import logging
 import datetime
@@ -166,14 +167,21 @@ class BERTTrainer:
         if val_loss is not None:
             items.append(f"Eval loss: {val_loss:6.2f}")
 
-        if self.config.run.is_primary:
-            self.writer.add_scalar("loss", loss, global_step=global_step)
-            if val_loss is not None:
-                self.writer.add_scalar("val_loss", val_loss, global_step=global_step)
+        self._log_progress(global_step, loss, val_loss)
 
         text = " | ".join(items)
         logging.info(text)
-        # logging.info("\n".join(["-" * 70, text, "-" * 70]))
+
+
+    def _log_progress(self, global_step, loss, val_loss):
+        if not self.config.run.is_primary:
+            return
+
+        self.writer.add_scalar("loss", loss, global_step=global_step)
+        wandb.log({"loss": loss}, step=global_step)
+        if val_loss is not None:
+            self.writer.add_scalar("val_loss", val_loss, global_step=global_step)
+            wandb.log({"val_loss": val_loss}, step=global_step)
 
 
     def val_loss(self, loader):

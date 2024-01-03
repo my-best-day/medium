@@ -1,10 +1,29 @@
 import torch
 from typing import Union
 from pathlib import Path
-from dataclasses import dataclass
+from dataclasses import dataclass, fields
+
+class BaseConfig:
+    def to_dict(self):
+        """
+        A json serializable dict representation of the dataclass.
+        Some types are converted to str for json serialization.
+        """
+        result = {}
+        for f in fields(self):
+            value = getattr(self, f.name)
+            if isinstance(value, Path):
+                value = str(value)
+            elif isinstance(value, torch.device):
+                value = str(value)
+            elif isinstance(value, (ModelConfig, TrainConfig, RunConfig)):
+                value = value.to_dict()
+            result[f.name] = value
+        return result
+
 
 @dataclass
-class ModelConfig:
+class ModelConfig(BaseConfig):
     seq_len: int = None
     # vocab_size: int = None
     d_model: int = None
@@ -12,8 +31,9 @@ class ModelConfig:
     heads: int = None
     dropout: float = None
 
+
 @dataclass
-class TrainConfig:
+class TrainConfig(BaseConfig):
     batch_size: int
     val_interval: int
     start_epoch: int
@@ -43,8 +63,9 @@ class TrainConfig:
         if self.checkpoint is not None and not self.checkpoint.exists():
             raise Exception(f'Checkpoint {self.checkpoint} does not exist.')
 
+
 @dataclass
-class RunConfig:
+class RunConfig(BaseConfig):
     base_dir: Path
     run_id: int
 
@@ -61,7 +82,6 @@ class RunConfig:
 
     local_rank: int = None
     device: Union[str, torch.device] = None
-
 
     case: str = None        # movies, instacart
 
@@ -89,8 +109,9 @@ class RunConfig:
         if self.case not in ['movies', 'instacart']:
             raise Exception(f'Invalid case {self.case}. Valid values are movies, instacart.')
 
+
 @dataclass
-class Config:
+class Config(BaseConfig):
     model: ModelConfig
     train: TrainConfig
     run: RunConfig
