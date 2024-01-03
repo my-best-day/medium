@@ -281,12 +281,13 @@ def _main():
     init_mode_set_device(config)
 
     config_logging(config)
-    config_wandb(config)
 
     if config.run.is_primary:
         logging.info(config.model)
         logging.info(config.train)
         logging.info(config.run)
+
+        config_wandb(config)
 
     if config.run.parallel_mode == 'ddp':
         torch.distributed.init_process_group(backend=config.run.dist_backend, init_method='env://')
