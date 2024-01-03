@@ -41,10 +41,13 @@ class TrainConfig(BaseConfig):
     dataset_pattern: str
     val_dataset_pattern: str
     weight_decay: float
+    dataset_percentage: float
+    val_dataset_percentage: float
     checkpoint: Path = None
     learning_rate: float = None
     max_checkpoints: int = None
     lr_scheduler: str = None
+
 
     def __post_init__(self):
         if self.start_epoch < 0:
@@ -62,6 +65,12 @@ class TrainConfig(BaseConfig):
 
         if self.checkpoint is not None and not self.checkpoint.exists():
             raise Exception(f'Checkpoint {self.checkpoint} does not exist.')
+
+        # verify percentage is between 0 and 1
+        if self.dataset_percentage < 0 or self.dataset_percentage > 1:
+            raise Exception(f'Invalid dataset percentage {self.dataset_percentage}. Must be between 0 and 1.')
+        if self.val_dataset_percentage < 0 or self.val_dataset_percentage > 1:
+            raise Exception(f'Invalid val dataset percentage {self.val_dataset_percentage}. Must be between 0 and 1.')
 
 
 @dataclass

@@ -121,8 +121,11 @@ def get_args() -> configargparse.Namespace:
     parser.add_argument('--lr-scheduler', type=str, default=None, help='Learning rate scheduler')
     parser.add_argument('--weight-decay', type=float, default=0.0, help='Weight decay')
 
+    parser.add_argument('--dataset-percentage', type=float, default=1.0, help='Percentage of dataset to use')
+    parser.add_argument('--val-dataset-percentage', type=float, default=1.0, help='Percentage of validation dataset to use')
+
     # run arguments
-    parser.add_argument('--base-dir', type=str, default='.', help='Base directory for logs and checkpoints.')
+    parser.add_argument('--base-dir', type=str, default=None, help='Base directory for logs and checkpoints. Defaulted to case name.')
     parser.add_argument('--run-id', type=int, default=None, help='Run id. If not specified, the next available run id will be used.')
     parser.add_argument('--datasets-dir', type=str, default='datasets', help='Directory containing datasets.')
 
@@ -154,7 +157,10 @@ def get_args() -> configargparse.Namespace:
     if args.ddp:
         args.parallel_mode = 'ddp'
 
-    args.base_dir = Path(args.base_dir)
+    if args.base_dir is None:
+        args.base_dir = Path(args.case)
+    else:
+        args.base_dir = Path(args.base_dir)
     if not args.base_dir.exists():
         parser.error(f'Base directory {args.base_dir} does not exist.')
 
@@ -181,6 +187,12 @@ def get_args() -> configargparse.Namespace:
         args.lr_scheduler = None
 
     args.weights_decay = float(args.weight_decay)
+
+    # verify percentage is between 0 and 1
+    if args.dataset_percentage < 0 or args.dataset_percentage > 1:
+        parser.error(f'Invalid dataset percentage {args.dataset_percentage}. Must be between 0 and 1.')
+    if args.val_dataset_percentage < 0 or args.val_dataset_percentage > 1:
+        parser.error(f'Invalid val dataset percentage {args.val_dataset_percentage}. Must be between 0 and 1.')
 
     if args.checkpoint is not None:
         args.checkpoint = Path(args.checkpoint)
@@ -220,6 +232,8 @@ def get_config_objects(args):
         max_checkpoints=args.max_checkpoints,
         lr_scheduler=args.lr_scheduler,
         weight_decay=args.weight_decay,
+        dataset_percentage=args.dataset_percentage,
+        val_dataset_percentage=args.val_dataset_percentage,
     )
     run_config = RunConfig(
         base_dir = args.base_dir,

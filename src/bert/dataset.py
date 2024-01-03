@@ -11,8 +11,9 @@ from torch.utils.data import Dataset
 from bert.timer import Timer
 
 class BERTDatasetPrecached(Dataset):
-    def __init__(self, path):
+    def __init__(self, path, percentage=1.0):
         self._type = None
+        self._percentage = percentage
         # timer = Timer("load precached dataset")
         opener = gzip.open if path.endswith('.gz') else open
         with opener(path, 'rb') as f:
@@ -25,15 +26,19 @@ class BERTDatasetPrecached(Dataset):
                 self.cached_data = msgpack.unpackb(packed_data, raw=False)
             else:
                 raise ValueError(f"Unknown file type: {path}")
+            self.cached_data = self.cached_data[:int(len(self.cached_data) * percentage)]
         # logging.info(timer.step(f"loaded precached dataset {path}"))
 
     def __len__(self):
         if self._type == 0:
-            return len(self.cached_data)
+            result = len(self.cached_data)
         elif self._type == 1:
-            return len(self.cached_data) // 2
+            result = len(self.cached_data) // 2
         else:
             raise ValueError(f"Unknown type: {self._type}")
+        if self._percentage < 1.0:
+            result = int(result * self._percentage)
+        return result
 
     def __getitem__(self, index):
         if self._type == 0:

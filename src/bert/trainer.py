@@ -226,6 +226,8 @@ class BERTTrainer:
         global_step = epoch * self.batch_count + index
         start_time = time.time()
         name = f"bert_epoch{epoch}_index{global_step}_{datetime.datetime.utcnow().timestamp():.0f}.pt"
+        checkpoint_path = self.config.run.checkpoints_dir / name
+
         # initial version save epoch - 1
         # 0.1 fixed the epoch
         # 0.2 added lr_sched state
@@ -236,14 +238,35 @@ class BERTTrainer:
             'optimizer_state_dict': self.optimizer.state_dict(),
             'scheduler_state_dict': self.lr_sched.state_dict(),
             'loss': loss
-        }, self.config.run.checkpoints_dir / name)
+        }, checkpoint_path)
+
+        # Log the checkpoint as an artifact in wandb
+        artifact = wandb.Artifact(f'run{self.config.run.run_id}', type='model-checkpoint')
+        artifact.add_file(str(checkpoint_path))
+        # Add metadata
+        artifact.metadata = {
+            'epoch': epoch,
+            'index': index,
+            'loss': loss,
+            'global_step': global_step,
+            'name': name,
+        }
+        wandb.run.log_artifact(artifact)
 
         # remove old checkpoints
-
         checkpoints = natsort.natsorted(self.config.run.checkpoints_dir.glob("*.pt"))
         if len(checkpoints) > self.config.train.max_checkpoints:
             for checkpoint in checkpoints[:-self.config.train.max_checkpoints]:
                 checkpoint.unlink()
+
+        # remove old wandb artifacts
+        api = wandb.Api()
+        run = api.run(f"{wandb.run.entity}/{wandb.run.project}/{wandb.run.id}")
+        artifacts = sorted(run.logged_artifacts(), key=lambda a: a.created_at)
+        logging.warn(f"*** *** artifact count: {len(artifacts)}")
+        while len(artifacts) > self.config.train.max_checkpoints:
+            oldest_artifact = artifacts.pop(0)
+            oldest_artifact.delete()
 
         text = "\n".join([
             "",
@@ -385,5 +408,6 @@ class BERTTrainerPreprocessedDatasets(BERTTrainer):
 
         logging.info(f"Epoch: {epoch} - Loading dataset from {dataset_file}")
 
-        dataset = BERTDatasetPrecached(dataset_file)
+        percentage = self.config.train.dataset_percentage if train else self.config.train.val_dataset_percentage
+        dataset = BERTDatasetPrecached(dataset_file, percentage)
         return dataset
