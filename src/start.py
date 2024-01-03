@@ -288,9 +288,6 @@ def _main():
         raise e
 
 def config_wandb(config):
-    """
-    configure wandb
-    """
     import wandb
     wandb.init(
         project=config.run.case,
