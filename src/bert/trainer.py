@@ -241,17 +241,17 @@ class BERTTrainer:
         }, checkpoint_path)
 
         # Log the checkpoint as an artifact in wandb
-        artifact = wandb.Artifact(f'run{self.config.run.run_id}', type='model-checkpoint')
-        artifact.add_file(str(checkpoint_path))
-        # Add metadata
-        artifact.metadata = {
-            'epoch': epoch,
-            'index': index,
-            'loss': loss,
-            'global_step': global_step,
-            'name': name,
-        }
-        wandb.run.log_artifact(artifact)
+        # artifact = wandb.Artifact(f'run{self.config.run.run_id}', type='model-checkpoint')
+        # artifact.add_file(str(checkpoint_path))
+        # # Add metadata
+        # artifact.metadata = {
+        #     'epoch': epoch,
+        #     'index': index,
+        #     'loss': loss,
+        #     'global_step': global_step,
+        #     'name': name,
+        # }
+        # wandb.run.log_artifact(artifact)
 
         # remove old checkpoints
         checkpoints = natsort.natsorted(self.config.run.checkpoints_dir.glob("*.pt"))
@@ -259,14 +259,14 @@ class BERTTrainer:
             for checkpoint in checkpoints[:-self.config.train.max_checkpoints]:
                 checkpoint.unlink()
 
-        # remove old wandb artifacts
-        api = wandb.Api()
-        run = api.run(f"{wandb.run.entity}/{wandb.run.project}/{wandb.run.id}")
-        artifacts = sorted(run.logged_artifacts(), key=lambda a: a.created_at)
-        logging.warn(f"*** *** artifact count: {len(artifacts)}")
-        while len(artifacts) > self.config.train.max_checkpoints:
-            oldest_artifact = artifacts.pop(0)
-            oldest_artifact.delete()
+        # # remove old wandb artifacts
+        # api = wandb.Api()
+        # run = api.run(f"{wandb.run.entity}/{wandb.run.project}/{wandb.run.id}")
+        # artifacts = sorted(run.logged_artifacts(), key=lambda a: a.created_at)
+        # logging.debug(f"artifact count: {len(artifacts)}")
+        # while len(artifacts) > self.config.train.max_checkpoints:
+        #     oldest_artifact = artifacts.pop(0)
+        #     oldest_artifact.delete()
 
         text = "\n".join([
             "",
