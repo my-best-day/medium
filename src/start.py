@@ -138,6 +138,8 @@ def get_args() -> configargparse.Namespace:
     parser.add_argument('--dist-master-port', type=str, default='12355', help='Port of the master node.')
     parser.add_argument('--dist-backend', type=str, default='nccl', help='Backend for distributed training.')
 
+    parser.add_argument('--wandb', action='store_true', default=False, help='Use wandb for logging.')
+
     # add dp, ddp
     parser.add_argument('--dp', action='store_true', help='Use DataParallel for training.')
     parser.add_argument('--ddp', action='store_true', help='Use DistributedDataParallel for training.')
@@ -245,6 +247,7 @@ def get_config_objects(args):
         dist_backend = args.dist_backend,
         case = args.case,
         datasets_dir = args.datasets_dir,
+        wandb = args.wandb,
     )
     config = Config(
         model=model_config,
@@ -279,7 +282,6 @@ def _main():
     args = get_args()
     config = get_config_objects(args)
     init_mode_set_device(config)
-
     config_logging(config)
 
     if config.run.is_primary:
@@ -287,7 +289,8 @@ def _main():
         logging.info(config.train)
         logging.info(config.run)
 
-        config_wandb(config)
+        if config.run.wandb:
+            config_wandb(config)
 
     if config.run.parallel_mode == 'ddp':
         torch.distributed.init_process_group(backend=config.run.dist_backend, init_method='env://')

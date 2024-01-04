@@ -83,6 +83,8 @@ class RunConfig(BaseConfig):
     dist_master_port: str
     dist_backend: str
 
+    wandb: bool
+
     datasets_dir: Path
 
     run_dir: Path = Path()
