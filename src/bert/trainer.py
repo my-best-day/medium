@@ -132,9 +132,10 @@ class BERTTrainer:
 
         if val_loader is None:
             val_loss = None
+            val_accuracy = None
         else:
             timer = Timer("val loss")
-            val_loss = self.val_loss(val_loader)
+            val_loss, val_accuracy = self.val_loss(val_loader)
             if self.config.run.is_primary:
                 logging.info(timer.step())
 
@@ -143,6 +144,10 @@ class BERTTrainer:
                 val_loss = torch.tensor(val_loss).to(self.config.run.device)
                 torch.distributed.all_reduce(val_loss)
                 val_loss = val_loss.item() / torch.distributed.get_world_size()
+
+                val_accuracy = torch.tensor(val_accuracy).to(self.config.run.device)
+                torch.distributed.all_reduce(val_accuracy)
+                val_accuracy = val_accuracy.item() / torch.distributed.get_world_size()
 
         n_losses = len(losses)
         if self.config.run.parallel_mode == 'ddp':
@@ -165,14 +170,16 @@ class BERTTrainer:
         ]
         if val_loss is not None:
             items.append(f"Eval loss: {val_loss:6.2f}")
+        if val_accuracy is not None:
+            items.append(f"Eval accuracy: {val_accuracy:6.2%}")
 
-        self._log_progress(global_step, loss, val_loss)
+        self._log_progress(global_step, loss, val_loss, val_accuracy)
 
         text = " | ".join(items)
         logging.info(text)
 
 
-    def _log_progress(self, global_step, loss, val_loss):
+    def _log_progress(self, global_step, loss, val_loss, val_accuracy):
         if not self.config.run.is_primary:
             return
 
@@ -184,10 +191,15 @@ class BERTTrainer:
             self.writer.add_scalar("val_loss", val_loss, global_step=global_step)
             if self.config.run.wandb:
                 wandb.log({"val_loss": val_loss}, step=global_step)
-
+        if val_accuracy is not None:
+            self.writer.add_scalar("val_accuracy", val_accuracy, global_step=global_step)
+            if self.config.run.wandb:
+                wandb.log({"val_accuracy": val_accuracy}, step=global_step)
 
     def val_loss(self, loader):
         losses = []
+        total = 0
+        correct = 0
         with torch.no_grad():
             self.model.eval()
             for i, data in enumerate(loader):
@@ -198,8 +210,12 @@ class BERTTrainer:
                 mlm_out = self.model(sentence)
 
                 loss = self.criterion(mlm_out.transpose(1, 2), labels)
-
                 losses.append(loss.item())
+
+                # calculate accuracy
+                _, predicted = torch.max(mlm_out.data, 2)
+                total += labels.size(0) * labels.size(1)
+                correct += (predicted == labels).sum().item()
 
                 if i == 0 and self.config.run.case == 'movies' and (self.epoch + 1) % 10 == 0:
                     predicted = self.dump_sentences.batched_debug(sentence, labels, mlm_out)
@@ -207,7 +223,8 @@ class BERTTrainer:
 
         self.model.train()
         loss = sum(losses) / len(losses)
-        return loss
+        accuracy = correct / total
+        return loss, accuracy
 
 
     @staticmethod
