@@ -111,6 +111,10 @@ class BERTTrainer:
                 else:
                     self.training_summary(losses, None) # , val_loader)
 
+            if Path('./stop_now').exists():
+                logging.info("Stopping in the middle of the epoch training because file './stop_now' exists.")
+                break
+
         self.training_summary(losses, val_loader)
 
         return loss
