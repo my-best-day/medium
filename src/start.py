@@ -107,7 +107,6 @@ def get_args() -> configargparse.Namespace:
     parser.add_argument('--n-layers', type=int, default=None, help='Number of layers')
     parser.add_argument('--heads', type=int, default=None, help='Number of heads')
     parser.add_argument('--dropout', type=float, default=None, help='Dropout')
-    parser.add_argument('--learning-rate', type=float, default=None, help='Learning rate')
 
     # train arguments
     parser.add_argument('--batch-size', type=int, default=None, help='Batch size')
@@ -118,6 +117,7 @@ def get_args() -> configargparse.Namespace:
     parser.add_argument('--dataset-pattern', type=str, default=None, help='Dataset pattern')
     parser.add_argument('--val-dataset-pattern', type=str, default=None, help='Validation pattern')
     parser.add_argument('--max-checkpoints', type=int, default=5, help='Maximum number of checkpoints to keep.')
+    parser.add_argument('--learning-rate', type=float, default=None, help='Learning rate')
     parser.add_argument('--lr-scheduler', type=str, default=None, help='Learning rate scheduler')
     parser.add_argument('--weight-decay', type=float, default=0.0, help='Weight decay')
 
