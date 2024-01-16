@@ -2,6 +2,7 @@ import glob
 import time
 import torch
 import natsort
+import inspect
 import logging
 import datetime
 from pathlib import Path
@@ -13,15 +14,17 @@ from bert.dump_sentences import DumpStentences
 from bert.scheduled_optim import ScheduledOptim
 from torch.utils.data.distributed import DistributedSampler
 
+from contextlib import nullcontext
+
 from mtimer import MTimer
 from bert.timer import Timer
 from bert.dataset import BERTDatasetPrecached
 from utils.config import Config
 
-class BERTTrainer:
+class BERTTrainer2:
     def __init__(self,
                  config: Config,
-                 model: BERT,
+                 model: torch.nn.Module,
                  tokenizer,
                  ):
         self.config = config
@@ -31,23 +34,68 @@ class BERTTrainer:
 
         self.dump_sentences = DumpStentences(tokenizer)
 
-        # TODO: add to args & config
-        betas = (0.9, 0.999)
-        weight_decay = self.config.train.weight_decay
-
-        self.criterion = torch.nn.NLLLoss(ignore_index=0).to(self.config.run.device)
-        self.optimizer = torch.optim.Adam(
-            model.parameters(),
-            lr=self.config.train.learning_rate,
-            betas=betas,
-            weight_decay=weight_decay
-        )
-        self.lr_sched = get_lr_scheduler(self.optimizer, self.config.train.lr_scheduler)
+        self.optimizer = self.configure_optimizer()
 
         self._writer = None
 
-        self.start_epoch = 0
-        self.epoch = 0
+        self.iter_num = 0
+
+        # 'float32', 'bfloat16', or 'float16', the latter will auto implement a GradScaler
+        dtype = 'bfloat16' if torch.cuda.is_available() and torch.cuda.is_bf16_supported() else 'float16'
+
+        # torch.manual_seed(1337 + seed_offset)
+        torch.backends.cuda.matmul.allow_tf32 = True # allow tf32 on matmul
+        torch.backends.cudnn.allow_tf32 = True # allow tf32 on cudnn
+        device_type = self.config.run.device.type # 'cuda' if 'cuda' in device else 'cpu' # for later use in torch.autocast
+        # note: float16 data type will automatically use a GradScaler
+        ptdtype = {'float32': torch.float32, 'bfloat16': torch.bfloat16, 'float16': torch.float16}[dtype]
+        self.ctx = nullcontext() if device_type == 'cpu' else torch.amp.autocast(device_type=device_type, dtype=ptdtype)
+
+
+    def configure_optimizer(self, model):
+        # figure which parameters require weight decay
+        seen = set()
+        decay_params = []
+        no_decay_params = []
+        for param in model.parameters():
+            if not param.requires_grad:
+                continue
+            if param in seen:
+                continue
+            seen.add(param)
+            if len(param.shape) == 1 or param.shape[0] == 1:
+                no_decay_params.append(param)
+            else:
+                decay_params.append(param)
+        optimization_groups = [
+            {'params': decay_params, 'weight_decay': self.config.train.weight_decay},
+            {'params': no_decay_params, 'weight_decay': 0.0}
+        ]
+
+        if self.config.run.is_primary:
+            num_decay_params = sum(p.numel() for p in decay_params)
+            num_nodecay_params = sum(p.numel() for p in no_decay_params)
+            logging.info(f"num decayed parameter tensors: {len(decay_params)}, with {num_decay_params:,} parameters")
+            logging.info(f"num non-decayed parameter tensors: {len(no_decay_params)}, with {num_nodecay_params:,} parameters")
+
+        fused_available_ = 'fused' in inspect.signature(torch.optim.AdamW).parameters
+        # use fused if available and or device type is 'cuda'
+        use_fused = fused_available_ and self.config.run.device.type == 'cuda'
+        if self.config.run.is_primary:
+            logging.info(f"Using fused AdamW: {use_fused}")
+
+        extra_args = dict()
+        if use_fused:
+            extra_args['fused'] = True
+
+        optimizer = torch.optim.AdamW(
+            optimization_groups,
+            lr=self.config.train.learning_rate,
+            betas=(0.9, 0.999),
+            **extra_args
+        )
+
+        return optimizer
 
     @property
     def writer(self):
@@ -58,11 +106,34 @@ class BERTTrainer:
     def before_epoch(self, epoch):
         pass
 
+    def train_loop(self, optimizer):
+        iter = 0
+        val_interval = self.config.train.val_interval
+        eval_only = False
+        while True:
+
+            lr = self.get_lr(iter)
+            for param_group in optimizer.paragam_groups:
+                param_group['lr'] = lr
+
+            if iter % val_interval == 0:
+                losses = self.estimate_loss()
+                # log losses - either her or inside estimate loss
+                # how to handle train loss? I want to use the loss computed during training
+
+            # TODO: what is eval-only mode?
+            if eval_only:
+                break
+
+            with self.ctx:
+
+
+
     def train(self):
         timer = Timer("epoch time")
         for self.epoch in range(self.config.train.start_epoch, self.config.train.end_epoch):
-            if Path('./stop').exists() or Path('./stop_now').exists():
-                logging.info("Stopping training because file './stop' or './stop_now' exists.")
+            if Path('./stop').exists():
+                logging.info("Stopping training because file './stop' exists.")
                 break
             loss = self.train_epoch(self.epoch)
             self.lr_sched.step()
@@ -97,7 +168,8 @@ class BERTTrainer:
                 print("\n".join(predicted[:5]))
                 print("=" * 70 )
 
-            loss = self.criterion(mlm_out.transpose(1, 2), labels)
+            # loss = self.criterion(mlm_out.transpose(1, 2), labels)
+            loss = torch.nn.functional.cross_entropy(mlm_out.transpose(1, 2), labels, ignore_index=0)
             losses.append(loss.item())
 
             self.optimizer.zero_grad()
@@ -118,6 +190,29 @@ class BERTTrainer:
         self.training_summary(losses, val_loader)
 
         return loss
+
+    def get_lr(self, it):
+        import math
+
+        lr = self.config.train.learning_rate
+        min_lr = self.config.train.min_learning_rate
+
+        warmup_iter = self.config.train.warmup_iter
+        lr_decay_iters = self.config.train.lr_decay_iters
+
+        if it < warmup_iter:
+            lr = it * lr / warmup_iter
+
+        elif it <= lr_decay_iters:
+            ratio = (it - warmup_iter) / (lr_decay_iters - warmup_iter)
+            assert 0 <= ratio <= 1
+            coeff = 0.5 * (1.0 + math.cos(math.pi * ratio)) # range 0..1
+            lr = min_lr + coeff * (lr - min_lr)
+
+        else: # it > lr_decay_iters:
+            lr = min_lr
+
+        return lr
 
     def training_summary(self, losses, val_loader=None):
         # minimum number of batches before we start printing summary
@@ -317,10 +412,6 @@ class BERTTrainer:
 class LRSchedulerNoop:
     def step(self):
         pass
-
-    def state_dict(self):
-        return {}
-
 
 def get_lr_scheduler(optimizer, lr_scheduler_arg):
     if lr_scheduler_arg is None:

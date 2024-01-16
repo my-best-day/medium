@@ -84,6 +84,7 @@ class RunConfig(BaseConfig):
     dist_backend: str
 
     wandb: bool
+    compile: bool
 
     datasets_dir: Path
 

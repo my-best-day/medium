@@ -1,150 +1,157 @@
+import wandb
 import torch
-import argparse
-from pathlib import Path
-from transformers import BertTokenizer
+import logging
 
-from bert.bert import BERT
-from bert.bertlm import BERTLM
-from bert.trainer import BERTTrainerSingleDataset, BERTTrainerPreprocessedDatasets
+from args import get_args
+from utils.logging import config_logging
+from args_to_config import get_config
 
+# TODO: clustered ddp, use ddp_rank and ddp_local_rank
+# TODO: adjust max-iter, eval-iter, and micro-step-count based on number of gpus
+# TODO: shutdown process group
+# TODO: checkpoint: save and load
+# TODO:
 
-from config import *
+def ddp_cleanup():
+    torch.distributed.destroy_process_group()
 
-device = 'cuda' if torch.cuda.is_available() else 'cpu'
+def init_mode_set_device(config):
+    """
+    Initialize parallel mode and device.
+    Sets config.run.device
+    """
+    parallel_mode = config.run.parallel_mode
+    if parallel_mode == 'single':
+        config.run.device = 'cuda' if torch.cuda.is_available() else 'cpu'
+        config.run.is_primary = True
+    elif parallel_mode == 'dp':
+        if not torch.cuda.is_available() or torch.cuda.device_count() < 2:
+            raise RuntimeError('DataParallel training requires multiple GPUs.')
+        config.run.device = 'cuda' if torch.cuda.is_available() else 'cpu'
+        config.run.is_primary = True
+    elif parallel_mode == 'ddp':
+        import atexit
+        torch.cuda.set_device(config.run.local_rank)
+        config.run.device = torch.device('cuda', torch.cuda.current_device())
+        atexit.register(ddp_cleanup)
+        torch.distributed.init_process_group(backend=config.run.dist_backend)
+        config.run.is_primary = torch.cuda.current_device() == 0
+    else:
+        raise Exception(f'Unknown parallel mode {parallel_mode}. Valid values are single, dp, ddp.')
 
-# todo:
-# + see how batches are used
-# - add randomization in the sampling
-#   - I'm not sure how ipmortant this is, there is nothing special in the order of the sentences
-# - add estimate_loss
-# - see about how to move lines/data to device. gpt.py does it differently than here
-#
-# - optimize network structure folowing some of Andrej Karpathy's suggestions: norm before activation, etc
-# - add early stopping
-# - train / validation / set ?
-# - try running on Aleph with larger network, batch, MAX_LEN, etc.
-# - see if we can see the tokens in the output
-
-def _main(args):
-    # figured out the next run id
-    run_id = get_next_run_id(Path('./logs'))
-    print(f'run_id: {run_id}')
-
-    logs_dir = Path('./logs') / f'run{run_id}'
-    logs_dir.mkdir(parents=True, exist_ok=True)
-
-    checkpoints_dir = Path('./checkpoints') / f'run{run_id}'
-    checkpoints_dir.mkdir(parents=True, exist_ok=True)
-
-    tokenizer = BertTokenizer.from_pretrained('./bert-it-1/bert-it-vocab.txt', local_files_only=True)
-
-    bert_model = BERT(
-        vocab_size=len(tokenizer.vocab),
-        d_model=D_MODEL,
-        n_layers=N_LAYER,
-        heads=HEADS,
-        dropout=DROPOUT,
-        seq_len=MAX_LEN
+def config_wandb(config):
+    import wandb
+    wandb.init(
+        project=config.run.case,
+        config=config.to_dict(),
+        name=f'run{config.run.run_id}',
+        dir=config.run.run_dir,
     )
 
-    bert_lm = BERTLM(bert_model, len(tokenizer.vocab))
-
-    if torch.cuda.is_available():
-        # bert_model = torch.nn.DataParallel(bert_model)
-        bert_model = bert_model.to(device)
-        bert_lm = bert_lm.to(device)
-
-        if args.data_parallel:
-            # bert_lm = torch.nn.DataParallel(bert_lm)
-            bert_lm = torch.nn.parallel.DistributedDataParallel(bert_lm)
-
-
-    if False:
-        # train_data = BERTDatasetPrecached(
-        #     './datasets/train_data_12.pkl.gz')
-        # train_data = BERTDatasetPrecached(
-        #     './datasets/train_data_12.pkl')
-        # train_data = BERTDatasetPrecached(
-        #     './datasets/train_data_28.msgpack.gz')
-        # train_data = BERTDatasetPrecached(
-        #     './datasets/train_data_12.msgpack')
-
-        bert_trainer = BERTTrainerSingleDataset(
-            bert_lm,
-            log_dir=Path('./logs'),
-            checkpoint_dir=Path('./checkpoints'),
-            print_every=EVAL_INTERVAL,
-            batch_size=BATCH_SIZE,
-            learning_rate=LEARNING_RATE,
-            epochs=20,
-            tokenizer=tokenizer,
-            device=device,
-            dataset=train_data
-        )
+def get_tokenizer(config):
+    if config.run.case == 'movies':
+        from transformers import BertTokenizer
+        path = config.run.base_dir / 'vocab/bert-it-vocab.txt'
+        path = str(path)
+        result = BertTokenizer.from_pretrained(path, local_files_only=True)
+    elif config.run.case == 'instacart':
+        from instacart.instacart_tokenizer import InstacartTokenizer
+        path = config.run.base_dir / 'vocab' / 'instacart_vocab.txt'
+        result = InstacartTokenizer(path)
     else:
-        bert_trainer = BERTTrainerPreprocessedDatasets(
-            bert_lm,
-            logs_dir=logs_dir,
-            checkpoints_dir=checkpoints_dir,
-            print_every=EVAL_INTERVAL,
-            batch_size=BATCH_SIZE,
-            learning_rate=LEARNING_RATE,
-            epochs=args.epochs,
-            tokenizer=tokenizer,
-            device=device,
-            dataset_dir=Path('./datasets32'),
-            dataset_pattern='train_data_*.msgpack',
-            eval_pattern='val_data_*.msgpack',
+        raise Exception(f'Unknown case. {config.run.case}')
+    return result
+
+def wrap_model(config, model):
+    model = model.to(config.run.device)
+
+    mode = config.run.parallel_mode
+    if mode == 'single':
+        pass
+    elif mode == 'dp':
+        model = torch.nn.DataParallel(model)
+    elif mode == 'ddp':
+        logging.debug(f'wrap_model, mode is {mode}, local_rank is {config.run.local_rank}')
+        model = torch.nn.parallel.DistributedDataParallel(model, device_ids=[config.run.local_rank])
+    else:
+        raise Exception(f'Unknown parallel mode {mode}. Valid values are single, dp, ddp.')
+    return model
+
+def get_model(config, tokenizer):
+    from bert.bert import BERT
+    from bert.bertlm import BERTLM
+
+    model_config = config.model
+    vocab_size = len(tokenizer.vocab)
+
+    # todo: if resuming from a ehckpoint, load the model from the checkpoint
+    # todo: and reconcile / adjust / validate the model config
+
+    bert_model = BERT(
+        vocab_size=vocab_size,
+        d_model=model_config.d_model,
+        n_layers=model_config.n_layers,
+        heads=model_config.heads,
+        dropout=model_config.dropout,
+        seq_len=model_config.seq_len
+    )
+
+    bert_lm = BERTLM(bert_model, vocab_size, apply_softmax=False)
+
+    if config.run.compile:
+        # requires PyTorch 2.0
+        bert_lm = torch.compile(bert_lm)
+
+    bert_lm = wrap_model(config, bert_lm)
+
+    return bert_lm
+
+def get_trainer(config, model, tokenizer):
+    from bert.trainer import BERTTrainerPreprocessedDatasets
+    from bert.trainerB import TrainerB
+    modern = True
+    if modern:
+        trainer = TrainerB(config, model, tokenizer)
+    else:
+        trainer = BERTTrainerPreprocessedDatasets(
+            config,
+            model,
+            tokenizer=tokenizer
         )
+    return trainer
 
-    if args.checkpoint:
-        bert_trainer.load_checkpoint(args.checkpoint)
+def create_objects(config):
+    tokenizer = get_tokenizer(config)
+    model = get_model(config, tokenizer)
 
-    bert_trainer.train()
+    total_parameters = sum([p.nelement() for p in model.parameters()])
+    logging.info(f"Total Parameters: {total_parameters:,}")
 
+    trainer = get_trainer(config, model, tokenizer)
+    # if self.config.train.checkpoint is not None:
+    #     self.trainer.load_checkpoint()
+    return trainer
 
-def get_args():
-    """
-    Parses command-line arguments for the training script.
-
-    Args:
-    --cp, --checkpoint <path>: Path to a specific checkpoint. The continue flag is expected.
-    -e, --epochs <int>: Number of epochs to train.
-
-    Returns:
-    argparse.Namespace: Parsed command-line arguments.
-    """
-    # Create the parser
-    parser = argparse.ArgumentParser(description="Process arguments for training.")
-
-    # Add arguments
-    parser.add_argument('--checkpoint', '--cp', type=str, default=None, metavar='<path>', help='Path to a specific checkpoint.')
-    parser.add_argument('--epochs', '-e', type=int, default=20, help='Number of epochs to train.')
-    parser.add_argument('--data-parallel', '-d', action='store_true', help='Use DataParallel for training')
-
-    # Parse arguments
-    args = parser.parse_args()
-
-    if args.checkpoint is not None:
-        path = Path(args.checkpoint)
-        if not path.exists():
-            parser.error(f'Checkpoint {path} does not exist.')
-
-    if args.epochs <= 0:
-        parser.error('Number of epochs must be positive.')
-
-    return args
-
-def get_next_run_id(parent_path: Path):
-    """
-    Iterate from 1 to 1000, check if parent_path/run{id} exists, return first id that doesn't exist. Raise exception if all ids are taken.
-    """
-    for i in range(1000):
-        path = parent_path / f'run{i}'
-        if not path.exists():
-            return i
-    raise Exception('All run ids are taken.')
-
-if __name__ == '__main__':
+def _main():
     args = get_args()
-    _main(args)
+    config = get_config(args)
+
+    init_mode_set_device(config)
+
+    logfile_path = config.run.run_dir / 'log.txt'
+    config_logging(logfile_path)
+
+    if config.run.is_primary:
+        logging.info(config.model)
+        logging.info(config.train)
+        logging.info(config.run)
+
+        if config.run.wandb:
+            config_wandb(config)
+
+    trainer = create_objects(config)
+    trainer.train()
+
+
+if __name__ == "__main__":
+    _main()
