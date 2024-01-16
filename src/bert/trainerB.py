@@ -194,14 +194,16 @@ class TrainerB:
 
         return val_loss, val_accuracy
 
-    def sync_up(self, loss):
+    def sync_up(self, item):
         if self.config.run.parallel_mode == 'ddp':
-            if not isinstance(loss, torch.Tensor):
-                tensor = torch.tensor(loss).to(self.config.run.device)
+            if isinstance(item, torch.Tensor):
+                tensor = item
+            else:
+                tensor = torch.tensor(item).to(self.config.run.device)
             torch.distributed.all_reduce(tensor)
-            result = tensor.item() / self.config.run.world_size
+            result = tensor.item() / torch.distributed.get_world_size()
         else:
-            result = loss.item() if isinstance(loss, torch.Tensor) else loss
+            result = item.item() if isinstance(item, torch.Tensor) else item
         return result
 
     @property
