@@ -32,9 +32,10 @@ class TrainerB:
         ptdtype = {'float32': torch.float32, 'bfloat16': torch.bfloat16, 'float16': torch.float16}[dtype]
         self.autocast_ctx = nullcontext() if device_type == 'cpu' else torch.amp.autocast(device_type=device_type, dtype=ptdtype)
 
-        self.train_loader, self.val_loader = self.get_data_loaders()
-        self.train_loader_iter = iter(self.train_loader)
-        self.val_loader_iter = iter(self.val_loader)
+        self.train_loader_iter = None
+        self.val_loader_iter = None
+
+        self.dataset_counters = {'train': 0, 'val': 0}
 
         # todo: take from config
         self.iter = 0
@@ -90,30 +91,6 @@ class TrainerB:
         self.scaler.step(self.optimizer)
         self.scaler.update()
 
-    # TODO: better scheme for iteration that works with DDP
-    def get_batch(self, split):
-        if split == 'train':
-            loader_iter = self.train_loader_iter
-        elif split == 'val':
-            loader_iter = self.val_loader_iter
-        else:
-            raise ValueError(f"Unknown split: {split}")
-
-        try:
-            X, Y = next(loader_iter)
-            X = X.to(self.config.run.device)
-            Y = Y.to(self.config.run.device)
-            return X, Y
-        except StopIteration:
-            # Handle the case when the iterator is exhausted
-            # For example, you can reset the iterator or raise an exception
-            if split == 'train':
-                self.train_loader_iter = iter(self.train_loader)
-            elif split == 'val':
-                self.val_loader_iter = iter(self.val_loader)
-            else:
-                raise ValueError(f"Unknown split: {split}")
-            return self.get_batch(split)
 
     # def get_batch(self, split):
     #     if split == 'train':
@@ -262,39 +239,77 @@ class TrainerB:
 
         return optimizer
 
-    def get_data_loaders(self):
+    # TODO: better scheme for iteration that works with DDP
+    def get_batch(self, split):
+        if split == 'train':
+            iter = self.train_loader_iter
+        elif split == 'val':
+            iter = self.val_loader_iter
+        else:
+            raise ValueError(f"Unknown split: {split}")
+
+        if iter is None:
+            iter = self.get_data_iter(split)
+
+        try:
+            X, Y = next(iter)
+            X = X.to(self.config.run.device)
+            Y = Y.to(self.config.run.device)
+            return X, Y
+        except StopIteration:
+            # Handle the case when the iterator is exhausted
+            # For example, you can reset the iterator or raise an exception
+            if split == 'train':
+                self.train_loader_iter = None
+            elif split == 'val':
+                self.val_loader_iter = None
+            else:
+                raise ValueError(f"Unknown split: {split}")
+            return self.get_batch(split)
+
+    def get_data_iter(self, split):
+        data_loader = self.get_data_loader(split)
+        data_iter = iter(data_loader)
+        if split == 'train':
+            self.train_loader_iter = data_iter
+        elif split == 'val':
+            self.val_loader_iter = data_iter
+        else:
+            raise ValueError(f"Unknown split: {split}")
+        return data_iter
+
+    def get_data_loader(self, split):
         from torch.utils.data import DataLoader
         from torch.utils.data.distributed import DistributedSampler
 
-        # TODO: epoch should be self.iter / len(dataset)
-        epoch = 0
+        epoch = self.dataset_counters[split]
+        self.dataset_counters[split] += 1
 
-        dataset = self.get_dataset(epoch, True)
-        # ds_size = len(dataset)
+        dataset = self.get_dataset(epoch, split)
         batch_size = self.config.train.batch_size
-        # self.batch_count = ds_size // batch_size
-
-        val_dataset = self.get_dataset(epoch, False)
 
         if self.config.run.parallel_mode == 'ddp':
             sampler = DistributedSampler(dataset)
             sampler.set_epoch(epoch)
             loader = DataLoader(dataset, sampler=sampler, batch_size=batch_size, pin_memory=True)
 
-            val_sampler = DistributedSampler(val_dataset)
-            val_sampler.set_epoch(epoch)
-            val_loader = DataLoader(val_dataset, sampler=val_sampler, batch_size=batch_size, shuffle=False, pin_memory=True)
         else:
             loader = DataLoader(dataset, batch_size=batch_size, pin_memory=True)
-            val_loader = DataLoader(val_dataset, batch_size=batch_size, shuffle=False, pin_memory=True)
 
-        return loader, val_loader
+        return loader
 
-    def get_dataset(self, epoch, train):
+    def get_dataset(self, epoch, split):
         import glob
         from bert.dataset import BERTDatasetPrecached
 
-        pattern = self.config.train.dataset_pattern if train else self.config.train.val_dataset_pattern
+        if split == 'train':
+            pattern = self.config.train.dataset_pattern
+            percentage = self.config.train.dataset_percentage
+        elif split == 'val':
+            pattern = self.config.train.val_dataset_pattern
+            percentage = self.config.train.val_dataset_percentage
+        else:
+            raise ValueError(f"Unknown split: {split}")
 
         pattern = str(self.config.run.datasets_dir / pattern)
         # add an optional .gz extension to the pattern
@@ -306,6 +321,5 @@ class TrainerB:
 
         logging.info(f"Epoch: {epoch} - Loading dataset from {dataset_file}")
 
-        percentage = self.config.train.dataset_percentage if train else self.config.train.val_dataset_percentage
         dataset = BERTDatasetPrecached(dataset_file, percentage)
         return dataset
