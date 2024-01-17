@@ -10,6 +10,10 @@ from bert.timer import Timer
 
 # TODO: adjust eval_interval, max_iters, val_iters by world_size (number of GPUs)
 
+# switches, we hope all should be True
+ASYNCHRONOUS_TO_DEVICE = False
+ENABLE_FUSED_ADAMW = False
+
 class TrainerB:
     def __init__(self, config, model, tokenizer):
         self.config = config
@@ -139,7 +143,7 @@ class TrainerB:
             self.log_wandb(train_loss, val_loss, val_accuracy, lr)
 
         num_digits = len(f'{self.config.train.max_iters:,}')
-        per_iteration = elapsed / self.iter if self.iter > 0 else 100.0
+        per_iteration = (elapsed / self.iter) if self.iter > 0 else 0.75
         remaining = per_iteration * (self.config.train.max_iters - self.iter)
         loss_str = 'None' if train_loss is None else f'{train_loss:5.2f}'
         items = [
@@ -148,7 +152,7 @@ class TrainerB:
             f'e: {time.strftime("%H:%M:%S", time.gmtime(elapsed))}',
             f'r: {time.strftime("%H:%M:%S", time.gmtime(remaining))}',
             f'{time.strftime("%M:%S", time.gmtime(per_iteration * 1000.0))} /Kit',
-            f'lr: {lr*10000:.5f} e-4',
+            f'lr: {lr*1000:6.4f} e-3',
             f't.loss: {loss_str}',
             f'v.loss: {val_loss:5.2f}',
             f'v.accu: {val_accuracy:.1%}',
@@ -242,10 +246,14 @@ class TrainerB:
             logging.info(f"num decayed parameter tensors: {len(decay_params)}, with {num_decay_params:,} parameters")
             logging.info(f"num non-decayed parameter tensors: {len(no_decay_params)}, with {num_nodecay_params:,} parameters")
 
-        fused_available_ = 'fused' in inspect.signature(torch.optim.AdamW).parameters
+        if ENABLE_FUSED_ADAMW:
+            fused_available_ = 'fused' in inspect.signature(torch.optim.AdamW).parameters
+            use_fused = fused_available_ and device_type == 'cuda'
+        else:
+            use_fused = False
+
         # use fused if available and or device type is 'cuda'
         device_type = self.config.run.device if type(self.config.run.device) == str else self.config.run.device.type
-        use_fused = fused_available_ and device_type == 'cuda'
 
         if self.config.run.is_primary:
             logging.info(f"Using fused AdamW: {use_fused}")
@@ -277,8 +285,8 @@ class TrainerB:
 
         try:
             X, Y = next(iter)
-            X = X.to(self.config.run.device, non_blocking=True)
-            Y = Y.to(self.config.run.device, non_blocking=True)
+            X = X.to(self.config.run.device, non_blocking=ASYNCHRONOUS_TO_DEVICE)
+            Y = Y.to(self.config.run.device, non_blocking=ASYNCHRONOUS_TO_DEVICE)
             return X, Y
         except StopIteration:
             # Handle the case when the iterator is exhausted
@@ -315,10 +323,10 @@ class TrainerB:
         if self.config.run.parallel_mode == 'ddp':
             sampler = DistributedSampler(dataset)
             sampler.set_epoch(epoch)
-            loader = DataLoader(dataset, sampler=sampler, batch_size=batch_size, pin_memory=True)
+            loader = DataLoader(dataset, sampler=sampler, batch_size=batch_size, pin_memory=ASYNCHRONOUS_TO_DEVICE)
 
         else:
-            loader = DataLoader(dataset, batch_size=batch_size, pin_memory=True)
+            loader = DataLoader(dataset, batch_size=batch_size, pin_memory=ASYNCHRONOUS_TO_DEVICE)
 
         return loader
 

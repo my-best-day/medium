@@ -6,6 +6,14 @@ from args import get_args
 from utils.logging import config_logging
 from args_to_config import get_config
 
+import warnings
+# Suppress specific warning
+warnings.filterwarnings("ignore", message="\'has_cuda\' is deprecated")
+warnings.filterwarnings("ignore", message="\'has_cudnn\' is deprecated")
+warnings.filterwarnings("ignore", message="\'has_mps\' is deprecated")
+warnings.filterwarnings("ignore", message="\'has_mkldnn\' is deprecated")
+
+
 # TODO: clustered ddp, use ddp_rank and ddp_local_rank
 # TODO: adjust max-iter, eval-iter, and micro-step-count based on number of gpus
 # TODO: shutdown process group
@@ -101,6 +109,9 @@ def get_model(config, tokenizer):
     if config.run.compile:
         # requires PyTorch 2.0
         bert_lm = torch.compile(bert_lm)
+        logging.info("Model compiled")
+    else:
+        logging.info("Model not compiled")
 
     bert_lm = wrap_model(config, bert_lm)
 
