@@ -1,7 +1,7 @@
 import time
 import torch
 import logging
-
+from pathlib import Path
 from contextlib import nullcontext
 
 from mtimer import MTimer
@@ -39,7 +39,7 @@ class TrainerB:
 
         # todo: take from config
         self.iter = 0
-        self.max_iters = 5000
+        # self.config.train.max_iters = 5000
         self.micro_step_count = 1
         self.grad_clip = 1.0
         self.val_iters = 10
@@ -49,9 +49,10 @@ class TrainerB:
         losses = []
         X, Y = self.get_batch('train')
         while self.should_continue_training():
+            lr = self.adjust_lr()
             if self.should_estimate_loss():
                 elapsed = timer.elapsed(restart=False)
-                self.estimate_loss_and_log_progress(elapsed, losses)
+                self.estimate_loss_and_log_progress(elapsed, losses, lr)
                 losses = []
             # enter micro-step
             accumulated_loss = 0.0
@@ -69,10 +70,44 @@ class TrainerB:
             self.iter += 1
 
     def should_continue_training(self):
-        return self.iter < self.max_iters
+        if Path('./stop').exists() or Path('./stop_now').exists():
+            logging.info("Stopping training because file './stop' or './stop_now' exists.")
+            result = False
+        else:
+            result = self.iter < self.config.train.max_iters
+        return result
 
     def should_estimate_loss(self):
         return self.iter % self.config.train.val_interval == 0
+
+    def adjust_lr(self):
+        lr = self.get_lr(self.iter)
+        for param_group in self.optimizer.param_groups:
+            param_group['lr'] = lr
+        return lr
+
+    def get_lr(self, iter):
+        import math
+
+        lr = self.config.train.learning_rate
+        min_lr = self.config.train.min_learning_rate
+
+        warmup_iters = self.config.train.warmup_iters
+        lr_decay_iters = self.config.train.lr_decay_iters
+
+        if iter < warmup_iters:
+            lr = iter * lr / warmup_iters
+
+        elif iter <= lr_decay_iters:
+            ratio = (iter - warmup_iters) / (lr_decay_iters - warmup_iters)
+            assert 0 <= ratio <= 1
+            coeff = 0.5 * (1.0 + math.cos(math.pi * ratio)) # range 0..1
+            lr = min_lr + coeff * (lr - min_lr)
+
+        else: # it > lr_decay_iters:
+            lr = min_lr
+
+        return lr
 
     def forward_and_loss(self, micro_step, X, Y):
         no_sync_ctx = self.model.no_sync() if (micro_step != self.micro_step_count - 1) else nullcontext()
@@ -91,41 +126,29 @@ class TrainerB:
         self.scaler.step(self.optimizer)
         self.scaler.update()
 
-
-    # def get_batch(self, split):
-    #     if split == 'train':
-    #         loader_iter = self.train_loader_iter
-    #     elif split == 'val':
-    #         loader_iter = self.val_loader_iter
-    #     else:
-    #         raise ValueError(f"Unknown split: {split}")
-    #     X, Y = next(loader_iter)
-    #     X = X.to(self.config.run.device)
-    #     Y = Y.to(self.config.run.device)
-    #     return X, Y
-
-    def estimate_loss_and_log_progress(self, elapsed, train_losses):
+    def estimate_loss_and_log_progress(self, elapsed, train_losses, lr):
         train_loss = sum(train_losses) / len(train_losses) if len(train_losses) > 0 else None
         val_loss, val_accuracy = self.estimate_val_loss()
         if self.config.run.is_primary:
-            self.log_progress(elapsed, train_loss, val_loss, val_accuracy)
+            self.log_progress(elapsed, train_loss, val_loss, val_accuracy, lr)
 
-    def log_progress(self, elapsed, train_loss, val_loss, val_accuracy):
-        self.log_tensorboard(train_loss, val_loss, val_accuracy)
+    def log_progress(self, elapsed, train_loss, val_loss, val_accuracy, lr):
+        self.log_tensorboard(train_loss, val_loss, val_accuracy, lr)
 
         if self.config.run.wandb:
-            self.log_wandb(train_loss, val_loss, val_accuracy)
+            self.log_wandb(train_loss, val_loss, val_accuracy, lr)
 
-        num_digits = len(f'{self.max_iters:,}')
+        num_digits = len(f'{self.config.train.max_iters:,}')
         per_iteration = elapsed / self.iter if self.iter > 0 else 100.0
-        remaining = per_iteration * (self.max_iters - self.iter)
+        remaining = per_iteration * (self.config.train.max_iters - self.iter)
         loss_str = 'None' if train_loss is None else f'{train_loss:5.2f}'
         items = [
-            f'{self.iter / self.max_iters:4.0%}',
-            f'{self.iter:>{num_digits},}/{self.max_iters:,}',
+            f'{self.iter / self.config.train.max_iters:4.0%}',
+            f'{self.iter:>{num_digits},}/{self.config.train.max_iters:,}',
             f'e: {time.strftime("%H:%M:%S", time.gmtime(elapsed))}',
             f'r: {time.strftime("%H:%M:%S", time.gmtime(remaining))}',
             f'{time.strftime("%M:%S", time.gmtime(per_iteration * 1000.0))} /Kit',
+            f'lr: {lr*10000:.5f} e-4',
             f't.loss: {loss_str}',
             f'v.loss: {val_loss:5.2f}',
             f'v.accu: {val_accuracy:.1%}',
@@ -133,15 +156,16 @@ class TrainerB:
         msg = ' | '.join(items)
         logging.info(msg)
 
-    def log_tensorboard(self, train_loss, val_loss, val_accuracy):
+    def log_tensorboard(self, train_loss, val_loss, val_accuracy, lr):
         if train_loss is not None:
             self.writer.add_scalar('train_loss', train_loss, self.iter)
         self.writer.add_scalar('val_loss', val_loss, self.iter)
         self.writer.add_scalar('val_accuracy', val_accuracy, self.iter)
+        self.writer.add_scalar('lr', lr, self.iter)
 
-    def log_wandb(self, train_loss, val_loss, val_accuracy):
+    def log_wandb(self, train_loss, val_loss, val_accuracy, lr):
         import wandb
-        wandb.log({'train_loss': train_loss, 'val_loss': val_loss, 'val_accuracy': val_accuracy}, step=self.iter)
+        wandb.log({'train_loss': train_loss, 'val_loss': val_loss, 'val_accuracy': val_accuracy, 'lr': lr}, step=self.iter)
 
     @torch.no_grad()
     def estimate_val_loss(self):
@@ -319,7 +343,7 @@ class TrainerB:
         dataset_files = sorted(dataset_files)
         dataset_file = dataset_files[epoch % len(dataset_files)]
 
-        logging.info(f"Epoch: {epoch} - Loading dataset from {dataset_file}")
+        logging.debug(f"Epoch: {epoch} - Loading dataset from {dataset_file}")
 
         dataset = BERTDatasetPrecached(dataset_file, percentage)
         return dataset

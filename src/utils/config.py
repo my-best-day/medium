@@ -43,8 +43,16 @@ class TrainConfig(BaseConfig):
     weight_decay: float
     dataset_percentage: float
     val_dataset_percentage: float
+
+    learning_rate: float
+    min_learning_rate: float
+    warmup_iters: int
+    lr_decay_iters: int
+    max_iters: int
+
     checkpoint: Path = None
-    learning_rate: float = None
+
+
     max_checkpoints: int = None
     lr_scheduler: str = None
 
