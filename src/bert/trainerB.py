@@ -276,9 +276,10 @@ class TrainerB:
             iter = self.get_data_iter(split)
 
         try:
-            X, Y = next(iter)
-            X = X.to(self.config.run.device)
-            Y = Y.to(self.config.run.device)
+            X0, Y0 = next(iter)
+            X = X0.to(self.config.run.device, non_blocking=True)
+            Y = Y0.to(self.config.run.device, non_blocking=True)
+            del X0, Y0
             return X, Y
         except StopIteration:
             # Handle the case when the iterator is exhausted
