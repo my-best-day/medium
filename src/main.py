@@ -138,7 +138,7 @@ def _main():
 
     init_mode_set_device(config)
 
-    logfile_path = config.run.run_dir / 'log.txt'
+    logfile_path = config.run.logs_dir / 'log.txt'
     config_logging(logfile_path)
 
     if config.run.is_primary:

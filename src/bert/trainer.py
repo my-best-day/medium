@@ -187,10 +187,10 @@ class BERTTrainer:
         if not self.config.run.is_primary:
             return
 
-        self.writer.add_scalar("loss", loss, global_step=global_step)
+        self.writer.add_scalar("train_loss", loss, global_step=global_step)
         if self.config.run.wandb:
             import wandb
-            wandb.log({"loss": loss}, step=global_step)
+            wandb.log({"train_loss": loss}, step=global_step)
         if val_loss is not None:
             self.writer.add_scalar("val_loss", val_loss, global_step=global_step)
             if self.config.run.wandb:
