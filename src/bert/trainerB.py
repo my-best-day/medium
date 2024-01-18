@@ -263,14 +263,14 @@ class TrainerB:
             logging.info(f"num decayed parameter tensors: {len(decay_params)}, with {num_decay_params:,} parameters")
             logging.info(f"num non-decayed parameter tensors: {len(no_decay_params)}, with {num_nodecay_params:,} parameters")
 
+        # use fused if available and or device type is 'cuda'
         if self.config.run.fused_adamw:
             fused_available_ = 'fused' in inspect.signature(torch.optim.AdamW).parameters
+            device_type = self.config.run.device if type(self.config.run.device) == str else self.config.run.device.type
             use_fused = fused_available_ and device_type == 'cuda'
         else:
             use_fused = False
 
-        # use fused if available and or device type is 'cuda'
-        device_type = self.config.run.device if type(self.config.run.device) == str else self.config.run.device.type
 
         if self.config.run.is_primary:
             logging.info(f"Using fused AdamW: {use_fused}")
