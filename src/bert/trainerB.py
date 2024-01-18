@@ -143,9 +143,9 @@ class TrainerB:
             self.log_wandb(train_loss, val_loss, val_accuracy, lr)
 
         num_digits = len(f'{self.config.train.max_iters:,}')
-        per_iteration = (elapsed / self.iter) if self.iter > 0 else 0.75
+        per_iteration = (elapsed / self.iter) if self.iter > 0 else 0.5
         remaining = per_iteration * (self.config.train.max_iters - self.iter)
-        loss_str = 'None' if train_loss is None else f'{train_loss:5.2f}'
+        loss_str = 'None ' if train_loss is None else f'{train_loss:5.2f}'
         items = [
             f'{self.iter / self.config.train.max_iters:4.0%}',
             f'{self.iter:>{num_digits},}/{self.config.train.max_iters:,}',
