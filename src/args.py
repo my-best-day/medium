@@ -46,7 +46,7 @@ def get_args() -> configargparse.Namespace:
 
     # run arguments
     parser.add_argument('--base-dir', type=str, default=None, help='Base directory for logs and checkpoints. Defaulted to case name.')
-    parser.add_argument('--run-id', type=int, default=None, help='Run id. If not specified, the next available run id will be used.')
+    parser.add_argument('--run-id', type=str, default=None, help='Run id. If not specified, the next available run id will be used.')
     parser.add_argument('--datasets-dir', type=str, default='datasets', help='Directory containing datasets.')
 
     parser.add_argument('--parallel-mode', type=str, default='single', choices=['single', 'dp', 'ddp'], help='Parallel mode for training')
