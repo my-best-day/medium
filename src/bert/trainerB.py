@@ -10,9 +10,6 @@ from bert.timer import Timer
 
 # TODO: adjust eval_interval, max_iters, val_iters by world_size (number of GPUs)
 
-# switches, we hope all should be True
-ASYNCHRONOUS_TO_DEVICE = True
-ENABLE_FUSED_ADAMW = False
 
 class TrainerB:
     def __init__(self, config, model, tokenizer):
@@ -171,6 +168,26 @@ class TrainerB:
         import wandb
         wandb.log({'train_loss': train_loss, 'val_loss': val_loss, 'val_accuracy': val_accuracy, 'lr': lr}, step=self.iter)
 
+    # def save_checkpoint(self, iter: int, val_loss: float):
+    #     # skip checkpoint if this is not the main process
+    #     if not self.config.run.is_primary:
+    #         return
+
+    #     is_wrapped = self.is_model_wrapped()
+
+    #     name = f"checkpoint.pt"
+    #     checkpoint_path = self.config.run.checkpoints_dir / name
+
+    #     torch.save({
+    #             'format': 'bert1',
+    #             'version': 1.0,
+    #             'iter': iter,
+    #             'model': (self.model.module if is_wrapped else self.model).state_dict(),
+    #             'optimizer': self.optimizer.state_dict(),
+    #             'val_loss': val_loss,
+    #             'config': self.config.to_dict(),
+    #         }, checkpoint_path)
+
     @torch.no_grad()
     def estimate_val_loss(self):
         losses = []
@@ -246,15 +263,14 @@ class TrainerB:
             logging.info(f"num decayed parameter tensors: {len(decay_params)}, with {num_decay_params:,} parameters")
             logging.info(f"num non-decayed parameter tensors: {len(no_decay_params)}, with {num_nodecay_params:,} parameters")
 
-
-        # use fused if available and or device type is 'cuda'
-        if ENABLE_FUSED_ADAMW:
+        if self.config.run.fused_adamw:
             fused_available_ = 'fused' in inspect.signature(torch.optim.AdamW).parameters
-            device_type = self.config.run.device if type(self.config.run.device) == str else self.config.run.device.type
             use_fused = fused_available_ and device_type == 'cuda'
         else:
             use_fused = False
 
+        # use fused if available and or device type is 'cuda'
+        device_type = self.config.run.device if type(self.config.run.device) == str else self.config.run.device.type
 
         if self.config.run.is_primary:
             logging.info(f"Using fused AdamW: {use_fused}")
@@ -286,8 +302,8 @@ class TrainerB:
 
         try:
             X, Y = next(iter)
-            X = X.to(self.config.run.device, non_blocking=ASYNCHRONOUS_TO_DEVICE)
-            Y = Y.to(self.config.run.device, non_blocking=ASYNCHRONOUS_TO_DEVICE)
+            X = X.to(self.config.run.device, non_blocking=self.config.run.async_to_device)
+            Y = Y.to(self.config.run.device, non_blocking=self.config.run.async_to_device)
             return X, Y
         except StopIteration:
             # Handle the case when the iterator is exhausted
@@ -324,10 +340,9 @@ class TrainerB:
         if self.config.run.parallel_mode == 'ddp':
             sampler = DistributedSampler(dataset)
             sampler.set_epoch(epoch)
-            loader = DataLoader(dataset, sampler=sampler, batch_size=batch_size, pin_memory=ASYNCHRONOUS_TO_DEVICE)
-
+            loader = DataLoader(dataset, sampler=sampler, batch_size=batch_size, pin_memory=self.config.run.async_to_device)
         else:
-            loader = DataLoader(dataset, batch_size=batch_size, pin_memory=ASYNCHRONOUS_TO_DEVICE)
+            loader = DataLoader(dataset, batch_size=batch_size, pin_memory=self.config.run.async_to_device)
 
         return loader
 

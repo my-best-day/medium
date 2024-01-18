@@ -93,6 +93,8 @@ class RunConfig(BaseConfig):
 
     wandb: bool
     compile: bool
+    async_to_device: bool
+    fused_adamw: bool
 
     datasets_dir: Path
 

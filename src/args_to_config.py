@@ -42,6 +42,8 @@ def get_config(args):
         datasets_dir = args.datasets_dir,
         wandb = args.wandb,
         compile = args.compile,
+        async_to_device=args.async_to_device,
+        fused_adamw=args.fused_adamw,
     )
     config = Config(
         model=model_config,
