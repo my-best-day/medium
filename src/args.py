@@ -52,6 +52,7 @@ def get_args() -> configargparse.Namespace:
     parser.add_argument('--parallel-mode', type=str, default='single', choices=['single', 'dp', 'ddp'], help='Parallel mode for training')
     parser.add_argument('--local-rank', type=int, default=None, help='Local rank. Necessary for using the torch.distributed.launch utility.')
     parser.add_argument('--case', type=str, default=None, choices=['movies', 'instacart'], help='Case to run')
+    parser.add_argument('--nproc', type=int, default=1, help='Number of processes for distributed training.')
 
     # add dist_master_addr, dist_master_port, dist_backend
     parser.add_argument('--dist-master-addr', type=str, default='localhost', help='Address of the master node.')
@@ -94,11 +95,14 @@ def get_args() -> configargparse.Namespace:
     if args.run_id is None:
         args.run_id = get_next_run_id(args.base_dir / 'runs')
 
-    if args.parallel_mode == 'ddp':
-        if args.local_rank is None and 'LOCAL_RANK' in os.environ:
-            args.local_rank = int(os.environ['LOCAL_RANK'])
-        if args.local_rank is None:
-            parser.error('Local rank must be specified when using DDP.')
+
+    if args.local_rank is None and 'LOCAL_RANK' in os.environ:
+        args.local_rank = int(os.environ['LOCAL_RANK'])
+    # if args.parallel_mode == 'ddp':
+    #     if args.local_rank is None and 'LOCAL_RANK' in os.environ:
+    #         args.local_rank = int(os.environ['LOCAL_RANK'])
+    #     if args.local_rank is None:
+    #         parser.error('Local rank must be specified when using DDP.')
 
         if args.local_rank < 0:
             parser.error(f'Invalid local rank {args.local_rank}. Must be >= 0.')

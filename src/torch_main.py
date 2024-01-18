@@ -2,9 +2,6 @@ import torch
 import logging
 
 
-def ddp_cleanup():
-    torch.distributed.destroy_process_group()
-
 def init_mode_set_device(config):
     """
     Initialize parallel mode and device.
@@ -13,19 +10,14 @@ def init_mode_set_device(config):
     parallel_mode = config.run.parallel_mode
     if parallel_mode == 'single':
         config.run.device = 'cuda' if torch.cuda.is_available() else 'cpu'
-        # config.run.is_primary = True
     elif parallel_mode == 'dp':
         if not torch.cuda.is_available() or torch.cuda.device_count() < 2:
             raise RuntimeError('DataParallel training requires multiple GPUs.')
         config.run.device = 'cuda' if torch.cuda.is_available() else 'cpu'
-        # config.run.is_primary = True
     elif parallel_mode == 'ddp':
         import atexit
         torch.cuda.set_device(config.run.local_rank)
         config.run.device = torch.device('cuda', torch.cuda.current_device())
-        atexit.register(ddp_cleanup)
-        torch.distributed.init_process_group(backend=config.run.dist_backend)
-        # config.run.is_primary = torch.cuda.current_device() == 0
     else:
         raise Exception(f'Unknown parallel mode {parallel_mode}. Valid values are single, dp, ddp.')
 

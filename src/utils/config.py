@@ -102,6 +102,7 @@ class RunConfig(BaseConfig):
 
     local_rank: int = None
     device: Union[str, torch.device] = None
+    is_primary: bool = True
 
     case: str = None        # movies, instacart
 
@@ -129,6 +130,7 @@ class RunConfig(BaseConfig):
         if self.case not in ['movies', 'instacart']:
             raise Exception(f'Invalid case {self.case}. Valid values are movies, instacart.')
 
+        self.is_primary = self.local_rank in (None, 0)
 
 @dataclass
 class Config(BaseConfig):
