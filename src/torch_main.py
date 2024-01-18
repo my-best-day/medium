@@ -15,7 +15,6 @@ def init_mode_set_device(config):
             raise RuntimeError('DataParallel training requires multiple GPUs.')
         config.run.device = 'cuda' if torch.cuda.is_available() else 'cpu'
     elif parallel_mode == 'ddp':
-        import atexit
         torch.cuda.set_device(config.run.local_rank)
         config.run.device = torch.device('cuda', torch.cuda.current_device())
     else:
@@ -65,7 +64,7 @@ def get_model(config, tokenizer):
         d_model=model_config.d_model,
         n_layers=model_config.n_layers,
         heads=model_config.heads,
-        dropout=model_config.dropout,
+        dropout=config.train.dropout,
         seq_len=model_config.seq_len
     )
 

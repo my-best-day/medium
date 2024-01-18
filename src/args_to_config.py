@@ -7,9 +7,9 @@ def get_config(args):
         d_model=args.d_model,
         n_layers=args.n_layers,
         heads=args.heads,
-        dropout=args.dropout,
     )
     train_config = TrainConfig(
+        dropout=args.dropout,
         batch_size=args.batch_size,
         val_interval=args.val_interval,
         checkpoint=args.checkpoint,

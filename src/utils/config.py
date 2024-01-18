@@ -29,11 +29,11 @@ class ModelConfig(BaseConfig):
     d_model: int = None
     n_layers: int = None
     heads: int = None
-    dropout: float = None
 
 
 @dataclass
 class TrainConfig(BaseConfig):
+    dropout: float = None
     batch_size: int
     val_interval: int
     start_epoch: int

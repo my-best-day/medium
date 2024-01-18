@@ -168,25 +168,25 @@ class TrainerB:
         import wandb
         wandb.log({'train_loss': train_loss, 'val_loss': val_loss, 'val_accuracy': val_accuracy, 'lr': lr}, step=self.iter)
 
-    # def save_checkpoint(self, iter: int, val_loss: float):
-    #     # skip checkpoint if this is not the main process
-    #     if not self.config.run.is_primary:
-    #         return
+    def save_checkpoint(self, iter: int, val_loss: float):
+        # skip checkpoint if this is not the main process
+        if not self.config.run.is_primary:
+            return
 
-    #     is_wrapped = self.is_model_wrapped()
+        is_wrapped = self.is_model_wrapped()
 
-    #     name = f"checkpoint.pt"
-    #     checkpoint_path = self.config.run.checkpoints_dir / name
+        name = f"checkpoint.pt"
+        checkpoint_path = self.config.run.checkpoints_dir / name
 
-    #     torch.save({
-    #             'format': 'bert1',
-    #             'version': 1.0,
-    #             'iter': iter,
-    #             'model': (self.model.module if is_wrapped else self.model).state_dict(),
-    #             'optimizer': self.optimizer.state_dict(),
-    #             'val_loss': val_loss,
-    #             'config': self.config.to_dict(),
-    #         }, checkpoint_path)
+        torch.save({
+                'format': 'bert1',
+                'version': 1.0,
+                'iter': iter,
+                'model': (self.model.module if is_wrapped else self.model).state_dict(),
+                'optimizer': self.optimizer.state_dict(),
+                'val_loss': val_loss,
+                'config': self.config.to_dict(),
+            }, checkpoint_path)
 
     @torch.no_grad()
     def estimate_val_loss(self):

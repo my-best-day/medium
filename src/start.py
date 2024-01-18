@@ -58,7 +58,7 @@ class Start:
             d_model=model_config.d_model,
             n_layers=model_config.n_layers,
             heads=model_config.heads,
-            dropout=model_config.dropout,
+            dropout=self.config.train.dropout,
             seq_len=model_config.seq_len
         )
 
