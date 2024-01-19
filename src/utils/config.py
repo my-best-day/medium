@@ -33,7 +33,6 @@ class ModelConfig(BaseConfig):
 
 @dataclass
 class TrainConfig(BaseConfig):
-    dropout: float = None
     batch_size: int
     val_interval: int
     start_epoch: int
@@ -50,6 +49,7 @@ class TrainConfig(BaseConfig):
     lr_decay_iters: int
     max_iters: int
 
+    dropout: float = None
     checkpoint: Path = None
 
 
