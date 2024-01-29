@@ -81,16 +81,17 @@ def get_model(config, tokenizer):
 
     return bert_lm
 
-def get_trainer(config, model, tokenizer):
+def get_trainer(config, model, optimizer, tokenizer):
     from bert.trainer import BERTTrainerPreprocessedDatasets
     from bert.trainerB import TrainerB
     modern = True
     if modern:
-        trainer = TrainerB(config, model, tokenizer)
+        trainer = TrainerB(config, model, optimizer, tokenizer)
     else:
         trainer = BERTTrainerPreprocessedDatasets(
             config,
             model,
+            optimizer,
             tokenizer=tokenizer
         )
     return trainer
@@ -104,7 +105,62 @@ def create_objects(config):
     total_parameters = sum([p.nelement() for p in model.parameters()])
     logging.info(f"Total Parameters: {total_parameters:,}")
 
-    trainer = get_trainer(config, model, tokenizer)
+    optimizer = configure_optimizer(config, model)
+
+    trainer = get_trainer(config, model, optimizer, tokenizer)
     # if self.config.train.checkpoint is not None:
     #     self.trainer.load_checkpoint()
     return trainer
+
+def configure_optimizer(config, model):
+    import inspect
+
+    # figure which parameters require weight decay
+    seen = set()
+    decay_params = []
+    no_decay_params = []
+    for param in model.parameters():
+        if not param.requires_grad:
+            continue
+        if param in seen:
+            continue
+        seen.add(param)
+        if len(param.shape) == 1 or param.shape[0] == 1:
+            no_decay_params.append(param)
+        else:
+            decay_params.append(param)
+    optimization_groups = [
+        {'params': decay_params, 'weight_decay': config.train.weight_decay},
+        {'params': no_decay_params, 'weight_decay': 0.0}
+    ]
+
+    if config.run.is_primary:
+        num_decay_params = sum(p.numel() for p in decay_params)
+        num_nodecay_params = sum(p.numel() for p in no_decay_params)
+        logging.info(f"num decayed parameter tensors: {len(decay_params)}, with {num_decay_params:,} parameters")
+        logging.info(f"num non-decayed parameter tensors: {len(no_decay_params)}, with {num_nodecay_params:,} parameters")
+
+    # use fused if available and or device type is 'cuda'
+    if config.run.fused_adamw:
+        fused_available_ = 'fused' in inspect.signature(torch.optim.AdamW).parameters
+        device_type = config.run.device if type(config.run.device) == str else config.run.device.type
+        use_fused = fused_available_ and device_type == 'cuda'
+    else:
+        use_fused = False
+
+
+    if config.run.is_primary:
+        logging.info(f"Using fused AdamW: {use_fused}")
+
+    extra_args = dict()
+    if use_fused:
+        extra_args['fused'] = True
+
+    optimizer = torch.optim.AdamW(
+        optimization_groups,
+        lr=config.train.learning_rate,
+        betas=(0.9, 0.999),
+        **extra_args
+    )
+
+    return optimizer

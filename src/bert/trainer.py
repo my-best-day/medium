@@ -22,6 +22,7 @@ class BERTTrainer:
     def __init__(self,
                  config: Config,
                  model: BERT,
+                 optimizer,
                  tokenizer,
                  ):
         self.config = config
@@ -374,8 +375,9 @@ class BERTTrainerPreprocessedDatasets(BERTTrainer):
     def __init__(self,
                  config: Config,
                  model: BERT,
+                 optimizer,
                 tokenizer):
-        super().__init__(config, model, tokenizer)
+        super().__init__(config, model, optimizer, tokenizer)
 
 
     def before_epoch(self, epoch):

@@ -12,12 +12,11 @@ from bert.timer import Timer
 
 
 class TrainerB:
-    def __init__(self, config, model, tokenizer):
+    def __init__(self, config, model, optimizer, tokenizer):
         self.config = config
         self.model = model
+        self.optimizer = optimizer
         self.tokenizer = tokenizer
-
-        self.optimizer = self.configure_optimizer(model)
 
         dtype = 'bfloat16' if torch.cuda.is_available() and torch.cuda.is_bf16_supported() else 'float16' # 'float32', 'bfloat16', or 'float16', the latter will auto implement a GradScaler
 
@@ -234,59 +233,6 @@ class TrainerB:
         if not hasattr(self, '_writer'):
             self._writer = SummaryWriter(str(self.config.run.logs_dir))
         return self._writer
-
-    def configure_optimizer(self, model):
-        import inspect
-
-        # figure which parameters require weight decay
-        seen = set()
-        decay_params = []
-        no_decay_params = []
-        for param in model.parameters():
-            if not param.requires_grad:
-                continue
-            if param in seen:
-                continue
-            seen.add(param)
-            if len(param.shape) == 1 or param.shape[0] == 1:
-                no_decay_params.append(param)
-            else:
-                decay_params.append(param)
-        optimization_groups = [
-            {'params': decay_params, 'weight_decay': self.config.train.weight_decay},
-            {'params': no_decay_params, 'weight_decay': 0.0}
-        ]
-
-        if self.config.run.is_primary:
-            num_decay_params = sum(p.numel() for p in decay_params)
-            num_nodecay_params = sum(p.numel() for p in no_decay_params)
-            logging.info(f"num decayed parameter tensors: {len(decay_params)}, with {num_decay_params:,} parameters")
-            logging.info(f"num non-decayed parameter tensors: {len(no_decay_params)}, with {num_nodecay_params:,} parameters")
-
-        # use fused if available and or device type is 'cuda'
-        if self.config.run.fused_adamw:
-            fused_available_ = 'fused' in inspect.signature(torch.optim.AdamW).parameters
-            device_type = self.config.run.device if type(self.config.run.device) == str else self.config.run.device.type
-            use_fused = fused_available_ and device_type == 'cuda'
-        else:
-            use_fused = False
-
-
-        if self.config.run.is_primary:
-            logging.info(f"Using fused AdamW: {use_fused}")
-
-        extra_args = dict()
-        if use_fused:
-            extra_args['fused'] = True
-
-        optimizer = torch.optim.AdamW(
-            optimization_groups,
-            lr=self.config.train.learning_rate,
-            betas=(0.9, 0.999),
-            **extra_args
-        )
-
-        return optimizer
 
     # TODO: better scheme for iteration that works with DDP
     def get_batch(self, split):
