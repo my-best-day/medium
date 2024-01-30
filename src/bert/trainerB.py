@@ -38,11 +38,12 @@ class TrainerB:
         self.dataset_counters = {'train': 0, 'val': 0}
 
         # todo: take from config
-        self.iter = 0
-        # self.config.train.max_iters = 5000
+        self.start_iter = 0
+        self.iter = self.start_iter
         self.micro_step_count = 1
         self.grad_clip = 1.0
         self.val_iters = 10
+        self.best_val_loss = float('inf')
 
     def train(self):
         timer = Timer()
@@ -78,7 +79,9 @@ class TrainerB:
         return result
 
     def should_estimate_loss(self):
-        return self.iter % self.config.train.val_interval == 0
+        iters = self.iter - self.start_iter
+        result = iters % self.config.train.val_interval == 0
+        return result
 
     def adjust_lr(self):
         lr = self.get_lr(self.iter)
@@ -131,6 +134,18 @@ class TrainerB:
         val_loss, val_accuracy = self.estimate_val_loss()
         if self.config.run.is_primary:
             self.log_progress(elapsed, train_loss, val_loss, val_accuracy, lr)
+
+            if val_loss < self.best_val_loss and self.iter > self.config.train.val_interval:
+                self.best_val_loss = val_loss
+                self.save_checkpoint(self.iter, val_loss)
+
+    def should_save_checkpoint(self, val_loss):
+        if val_loss >= self.best_val_loss:
+            return False
+        iters = self.iter - self.start_iter
+        if iters < self.val_iters:
+            return False
+        return True
 
     def log_progress(self, elapsed, train_loss, val_loss, val_accuracy, lr):
         self.log_tensorboard(train_loss, val_loss, val_accuracy, lr)

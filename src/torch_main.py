@@ -1,5 +1,6 @@
 import torch
 import logging
+from pathlib import Path
 
 
 def init_mode_set_device(config):
@@ -99,18 +100,51 @@ def get_trainer(config, model, optimizer, tokenizer):
 def create_objects(config):
     init_mode_set_device(config)
 
+    checkpoint = None
+    path = config.train.checkpoint
+    if path is not None:
+        logging.info(f"Resuming from checkpoint at {path}")
+        # use map_location='cpu' if GPU memory an issue (broadcasting required in that case!)
+        checkpoint = torch.load(path, map_location=config.run.device)
+
     tokenizer = get_tokenizer(config)
+
     model = get_model(config, tokenizer)
+    if checkpoint is not None:
+        model_state = checkpoint['model_state_dict']
+
+        is_wrapped = is_model_wrapped(config)
+        # in DDP, load state dict into the underlying model, otherwise, load it directly
+        (model.module if is_wrapped else model).load_state_dict(model_state)
+
+        if config.run.parallel_mode == 'ddp':
+            for param in model.parameters():
+                torch.distributed.broadcast(param.data, src=0)
 
     total_parameters = sum([p.nelement() for p in model.parameters()])
     logging.info(f"Total Parameters: {total_parameters:,}")
 
     optimizer = configure_optimizer(config, model)
+    if checkpoint is not None:
+        optimizer_state = checkpoint['optimizer_state_dict']
+        optimizer.load_state_dict(optimizer_state)
+
+    checkpoint = None # free up memory
 
     trainer = get_trainer(config, model, optimizer, tokenizer)
-    # if self.config.train.checkpoint is not None:
-    #     self.trainer.load_checkpoint()
+    if checkpoint is not None:
+        iter = checkpoint['iter']
+        trainer.start_iter = iter + 1
+        trainer.iter = trainer.start_iter
+
+        val_loss = checkpoint['val_loss']
+        trainer.best_val_loss = val_loss
+
     return trainer
+
+def is_model_wrapped(config):
+    result = config.run.parallel_mode in ('dp', 'ddp')
+    return result
 
 def configure_optimizer(config, model):
     import inspect
