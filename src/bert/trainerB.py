@@ -202,6 +202,10 @@ class TrainerB:
                 'config': self.config.to_dict(),
             }, checkpoint_path)
 
+    def is_model_wrapped(self):
+        result = self.config.run.parallel_mode in ('dp', 'ddp')
+        return result
+
     @torch.no_grad()
     def estimate_val_loss(self):
         losses = []
