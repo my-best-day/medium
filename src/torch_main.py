@@ -129,16 +129,17 @@ def create_objects(config):
         optimizer_state = checkpoint['optimizer']
         optimizer.load_state_dict(optimizer_state)
 
-    checkpoint = None # free up memory
-
     trainer = get_trainer(config, model, optimizer, tokenizer)
     if checkpoint is not None:
         iter = checkpoint['iter']
         trainer.start_iter = iter + 1
         trainer.iter = trainer.start_iter
+        logging.info(f"Resuming from iteration {iter + 1}, trainer.iter is {trainer.iter}")
 
         val_loss = checkpoint['val_loss']
         trainer.best_val_loss = val_loss
+
+    checkpoint = None # free up memory
 
     return trainer
 
