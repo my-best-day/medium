@@ -111,7 +111,7 @@ def create_objects(config):
 
     model = get_model(config, tokenizer)
     if checkpoint is not None:
-        model_state = checkpoint['model_state_dict']
+        model_state = checkpoint['model']
 
         is_wrapped = is_model_wrapped(config)
         # in DDP, load state dict into the underlying model, otherwise, load it directly
@@ -126,7 +126,7 @@ def create_objects(config):
 
     optimizer = configure_optimizer(config, model)
     if checkpoint is not None:
-        optimizer_state = checkpoint['optimizer_state_dict']
+        optimizer_state = checkpoint['optimizer']
         optimizer.load_state_dict(optimizer_state)
 
     checkpoint = None # free up memory
