@@ -25,7 +25,6 @@ class BaseConfig:
 @dataclass
 class ModelConfig(BaseConfig):
     seq_len: int = None
-    # vocab_size: int = None
     d_model: int = None
     n_layers: int = None
     heads: int = None
@@ -110,6 +109,8 @@ class RunConfig(BaseConfig):
 
     def __post_init__(self):
         # verified by the caller, double checking here
+        if isinstance(self.base_dir, str):
+            self.base_dir = Path(self.base_dir)
         if not self.base_dir.exists():
             raise Exception(f'Base directory {self.base_dir} does not exist.')
 
