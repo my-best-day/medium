@@ -132,9 +132,9 @@ def create_objects(config):
     trainer = get_trainer(config, model, optimizer, tokenizer)
     if checkpoint is not None:
         iter = checkpoint['iter']
-        trainer.start_iter = iter + 1
+        trainer.start_iter = iter
         trainer.iter = trainer.start_iter
-        logging.info(f"Resuming from iteration {iter + 1}, trainer.iter is {trainer.iter}")
+        logging.info(f"Resuming from iteration {iter}, trainer.iter is {trainer.iter}")
 
         val_loss = checkpoint['val_loss']
         trainer.best_val_loss = val_loss
