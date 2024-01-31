@@ -44,6 +44,7 @@ def get_config(args):
         compile = args.compile,
         async_to_device=args.async_to_device,
         fused_adamw=args.fused_adamw,
+        flash=args.flash,
     )
     config = Config(
         model=model_config,

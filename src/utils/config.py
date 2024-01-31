@@ -94,6 +94,7 @@ class RunConfig(BaseConfig):
     compile: bool
     async_to_device: bool
     fused_adamw: bool
+    flash: bool
 
     datasets_dir: Path
 

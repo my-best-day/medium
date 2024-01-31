@@ -63,6 +63,7 @@ def get_args() -> configargparse.Namespace:
     parser.add_argument('--compile', action='store_true', default=False, help='Compile the model.')
     parser.add_argument('--async-to-device', action='store_true', default=False, help='async tensors to device.')
     parser.add_argument('--fused-adamw', action='store_true', default=False, help='Use fused adamw.')
+    parser.add_argument('--flash', action='store_true', default=False, help='Use flash attention.')
 
 
     # add dp, ddp
