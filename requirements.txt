@@ -3,7 +3,10 @@ datasets
 tokenizers
 tensorboard
 msgpack
+torch
 torch-tb-profiler
 configargparse
 natsort
 wandb
+# tensorboard is not compatible with numpy 2.x
+numpy==1.26.4
