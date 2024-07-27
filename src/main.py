@@ -1,11 +1,18 @@
+"""
+TBD
+"""
 import os
 import logging
+import warnings
+import multiprocessing
+import torch
 
 from args import get_args
 from utils.logging import config_logging
 from args_to_config import get_config
 
-import warnings
+from torch_main import create_objects
+
 # Suppress specific warning
 warnings.filterwarnings("ignore", message="\'has_cuda\' is deprecated")
 warnings.filterwarnings("ignore", message="\'has_cudnn\' is deprecated")
@@ -28,13 +35,13 @@ def config_wandb(config):
         dir=config.run.run_dir,
     )
 
+
 def run(config):
-    from torch_main import create_objects
     trainer = create_objects(config)
     trainer.train()
 
+
 def run_ddp(config, world_size):
-    import multiprocessing
 
     processes = []
     for local_rank in range(world_size):
@@ -45,14 +52,14 @@ def run_ddp(config, world_size):
     for p in processes:
         p.join()
 
+
 def ddp_worker(config, local_rank, world_size):
-    import torch
 
     config.run.local_rank = local_rank
     config.run.is_primary = local_rank == 0
     os.environ['MASTER_ADDR'] = config.run.dist_master_addr
     os.environ['MASTER_PORT'] = config.run.dist_master_port
-    os.environ['LOCAL_RANK'] = str(local_rank) # probably not needed
+    os.environ['LOCAL_RANK'] = str(local_rank)  # probably not needed
     os.environ['WORLD_SIZE'] = str(world_size)
 
     torch.distributed.init_process_group(
@@ -85,6 +92,7 @@ def _main():
         run_ddp(config, args.nproc)
     else:
         run(config)
+
 
 if __name__ == "__main__":
     _main()
