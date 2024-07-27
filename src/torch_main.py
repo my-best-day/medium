@@ -1,6 +1,8 @@
-import torch
+"""
+TBD
+"""
 import logging
-from pathlib import Path
+import torch
 
 
 def init_mode_set_device(config):
@@ -14,14 +16,18 @@ def init_mode_set_device(config):
     elif parallel_mode == 'dp':
         if not torch.cuda.is_available() or torch.cuda.device_count() < 2:
             raise RuntimeError('DataParallel training requires multiple GPUs.')
-        config.run.device = 'cuda' if torch.cuda.is_available() else 'cpu'
+        config.run.device = 'cuda'
     elif parallel_mode == 'ddp':
         torch.cuda.set_device(config.run.local_rank)
         config.run.device = torch.device('cuda', torch.cuda.current_device())
     else:
-        raise Exception(f'Unknown parallel mode {parallel_mode}. Valid values are single, dp, ddp.')
+        # pylint: disable=exception-arguments
+        raise ValueError("Unknown parallel mode %s. Valid values are 'single', 'dp', 'ddp'.",
+                         parallel_mode)
+
 
 def wrap_model(config, model):
+    """Wrap the model with Distributed/DataParalel or none according to the config"""
     model = model.to(config.run.device)
 
     mode = config.run.parallel_mode
@@ -30,13 +36,15 @@ def wrap_model(config, model):
     elif mode == 'dp':
         model = torch.nn.DataParallel(model)
     elif mode == 'ddp':
-        logging.debug(f'wrap_model, mode is {mode}, local_rank is {config.run.local_rank}')
+        logging.debug('wrap_model, mode is %s, local_rank is %s', mode, config.run.local_rank)
         model = torch.nn.parallel.DistributedDataParallel(model, device_ids=[config.run.local_rank])
     else:
-        raise Exception(f'Unknown parallel mode {mode}. Valid values are single, dp, ddp.')
+        raise Exception('Unknown parallel mode %s. Valid values are single, dp, ddp.', mode)
     return model
 
+
 def get_tokenizer(config):
+    """Returns the tokenizer for the given case"""
     if config.run.case == 'movies':
         from transformers import BertTokenizer
         path = config.run.base_dir / 'vocab/bert-it-vocab.txt'
@@ -46,11 +54,19 @@ def get_tokenizer(config):
         from instacart.instacart_tokenizer import InstacartTokenizer
         path = config.run.base_dir / 'vocab' / 'instacart_vocab.txt'
         result = InstacartTokenizer(path)
+    elif config.run.case == 'charles':
+        from transformers import GPT2Tokenizer
+        result = GPT2Tokenizer.from_pretrained('gpt2')
     else:
-        raise Exception(f'Unknown case. {config.run.case}')
+        raise ValueError('Unknown case. %s', config.run.case)
     return result
 
+
 def get_model(config, tokenizer):
+    """
+    Returns the language model for the given config and tokenizer.
+    TODO: handle GPT
+    """
     from bert.bert import BERT
     from bert.bertlm import BERTLM
 
@@ -82,6 +98,7 @@ def get_model(config, tokenizer):
 
     return bert_lm
 
+
 def get_trainer(config, model, optimizer, tokenizer):
     from bert.trainer import BERTTrainerPreprocessedDatasets
     from bert.trainerB import TrainerB
@@ -97,13 +114,14 @@ def get_trainer(config, model, optimizer, tokenizer):
         )
     return trainer
 
+
 def create_objects(config):
     init_mode_set_device(config)
 
     checkpoint = None
     path = config.train.checkpoint
     if path is not None:
-        logging.info(f"Resuming from checkpoint at {path}")
+        logging.info("Resuming from checkpoint at %s", path)
         # use map_location='cpu' if GPU memory an issue (broadcasting required in that case!)
         checkpoint = torch.load(path, map_location=config.run.device)
 
@@ -122,6 +140,7 @@ def create_objects(config):
                 torch.distributed.broadcast(param.data, src=0)
 
     total_parameters = sum([p.nelement() for p in model.parameters()])
+    # pylint: disable=logging-fstring-interpolation
     logging.info(f"Total Parameters: {total_parameters:,}")
 
     optimizer = configure_optimizer(config, model)
@@ -131,21 +150,23 @@ def create_objects(config):
 
     trainer = get_trainer(config, model, optimizer, tokenizer)
     if checkpoint is not None:
-        iter = checkpoint['iter']
-        trainer.start_iter = iter
+        iteration = checkpoint['iter']
+        trainer.start_iter = iteration
         trainer.iter = trainer.start_iter
-        logging.info(f"Resuming from iteration {iter}, trainer.iter is {trainer.iter}")
+        logging.info("Resuming from iteration %s, trainer.iter is %s", iteration, trainer.iter)
 
         val_loss = checkpoint['val_loss']
         trainer.best_val_loss = val_loss
 
-    checkpoint = None # free up memory
+    checkpoint = None  # free up memory
 
     return trainer
+
 
 def is_model_wrapped(config):
     result = config.run.parallel_mode in ('dp', 'ddp')
     return result
+
 
 def configure_optimizer(config, model):
     import inspect
@@ -172,20 +193,20 @@ def configure_optimizer(config, model):
     if config.run.is_primary:
         num_decay_params = sum(p.numel() for p in decay_params)
         num_nodecay_params = sum(p.numel() for p in no_decay_params)
+        # pylint: disable=logging-fstring-interpolation
         logging.info(f"num decayed parameter tensors: {len(decay_params)}, with {num_decay_params:,} parameters")
         logging.info(f"num non-decayed parameter tensors: {len(no_decay_params)}, with {num_nodecay_params:,} parameters")
 
     # use fused if available and or device type is 'cuda'
     if config.run.fused_adamw:
         fused_available_ = 'fused' in inspect.signature(torch.optim.AdamW).parameters
-        device_type = config.run.device if type(config.run.device) == str else config.run.device.type
+        device_type = config.run.device if isinstance(config.run.device, str) else config.run.device.type
         use_fused = fused_available_ and device_type == 'cuda'
     else:
         use_fused = False
 
-
     if config.run.is_primary:
-        logging.info(f"Using fused AdamW: {use_fused}")
+        logging.info("Using fused AdamW: %s", use_fused)
 
     extra_args = dict()
     if use_fused:
