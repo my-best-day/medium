@@ -5,6 +5,10 @@ import collections
 
 
 class InstacartTokenizer:
+    """
+    The Instacart vocab file is a list of product ids sorted by frequency.
+    Dataset is a list of lists of product ids.
+    """
     def __init__(self, vocab_file, do_lower_case=True):
         with open(vocab_file, "r", encoding="utf-8") as reader:
             self.vocab = reader.readlines()
