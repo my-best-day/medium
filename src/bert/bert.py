@@ -20,7 +20,7 @@ class BERT(torch.nn.Module):
         :param attn_heads: number of attention heads
         :param dropout: dropout rate
         """
-        logging.info("BERT: vocab_size: $s, d_model: %s, n_layers: %s, heads: %s, dropout: %s",
+        logging.info("BERT: vocab_size: %s, d_model: %s, n_layers: %s, heads: %s, dropout: %s",
                      vocab_size, d_model, n_layers, heads, dropout)
 
         super().__init__()
