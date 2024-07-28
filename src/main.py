@@ -10,7 +10,7 @@ from args import get_args
 from utils.logging import config_logging
 from args_to_config import get_config
 
-from torch_main import create_objects
+from torch_main import create_objects_and_trainer
 
 # Suppress specific warning
 # warnings.filterwarnings("ignore", message="\'has_cuda\' is deprecated")
@@ -36,7 +36,7 @@ def config_wandb(config):
 
 
 def run(config):
-    trainer = create_objects(config)
+    trainer = create_objects_and_trainer(config)
     trainer.train()
 
 

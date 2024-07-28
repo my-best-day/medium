@@ -115,52 +115,59 @@ def get_trainer(config, model, optimizer, tokenizer):
     return trainer
 
 
-def create_objects(config):
+def create_objects_and_trainer(config):
     init_mode_set_device(config)
 
-    checkpoint = None
-    path = config.train.checkpoint
-    if path is not None:
-        logging.info("Resuming from checkpoint at %s", path)
-        # use map_location='cpu' if GPU memory an issue (broadcasting required in that case!)
-        checkpoint = torch.load(path, map_location=config.run.device)
-
+    # right tokenizer by case (movies, instacart, charles)
     tokenizer = get_tokenizer(config)
 
+    # BERT lang model / GPT (pending...)
     model = get_model(config, tokenizer)
-    if checkpoint is not None:
-        model_state = checkpoint['model']
 
-        is_wrapped = is_model_wrapped(config)
-        # in DDP, load state dict into the underlying model, otherwise, load it directly
-        (model.module if is_wrapped else model).load_state_dict(model_state)
-
-        if config.run.parallel_mode == 'ddp':
-            for param in model.parameters():
-                torch.distributed.broadcast(param.data, src=0)
-
-    total_parameters = sum([p.nelement() for p in model.parameters()])
+    total_model_parameters = sum([p.nelement() for p in model.parameters()])
     # pylint: disable=logging-fstring-interpolation
-    logging.info(f"Total Parameters: {total_parameters:,}")
+    logging.info(f"Total Model Parameters: {total_model_parameters:,}")
 
     optimizer = configure_optimizer(config, model)
-    if checkpoint is not None:
-        optimizer_state = checkpoint['optimizer']
-        optimizer.load_state_dict(optimizer_state)
-
     trainer = get_trainer(config, model, optimizer, tokenizer)
-    if checkpoint is not None:
-        iteration = checkpoint['iter']
-        trainer.start_iter = iteration
-        trainer.iter = trainer.start_iter
-        logging.info("Resuming from iteration %s, trainer.iter is %s", iteration, trainer.iter)
 
-        val_loss = checkpoint['val_loss']
-        trainer.best_val_loss = val_loss
-
-    checkpoint = None  # free up memory
+    resume_from_checkpoint(config, model, optimizer, trainer)
 
     return trainer
+
+
+def resume_from_checkpoint(config, model, optimizer, trainer):
+    path = config.train.checkpoint
+    if path is None:
+        return
+
+    logging.info("Resuming from checkpoint at %s", path)
+    # use map_location='cpu' if GPU memory an issue (broadcasting required in that case!)
+    checkpoint = torch.load(path, map_location=config.run.device)
+
+    # load model state
+    model_state = checkpoint['model']
+    is_wrapped = is_model_wrapped(config)
+    # in DDP, load state dict into the underlying model, otherwise, load it directly
+    (model.module if is_wrapped else model).load_state_dict(model_state)
+
+    if config.run.parallel_mode == 'ddp':
+        for param in model.module.parameters():
+            torch.distributed.broadcast(param.data, src=0)
+
+    # load optimizer state
+    optimizer_state = checkpoint['optimizer']
+    optimizer.load_state_dict(optimizer_state)
+
+    # load trainer state
+    iteration = checkpoint['iter']
+    trainer.start_iter = iteration
+    trainer.iter = trainer.start_iter
+
+    val_loss = checkpoint['val_loss']
+    trainer.best_val_loss = val_loss
+
+    logging.info("Resuming from iteration %s, with val loss %s", iteration, val_loss)
 
 
 def is_model_wrapped(config):
