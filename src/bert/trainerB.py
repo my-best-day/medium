@@ -4,7 +4,6 @@ import logging
 from pathlib import Path
 from contextlib import nullcontext
 
-from mtimer import MTimer
 from bert.timer import Timer
 
 
@@ -18,19 +17,27 @@ class TrainerB:
         self.optimizer = optimizer
         self.tokenizer = tokenizer
 
-        dtype = 'bfloat16' if torch.cuda.is_available() and torch.cuda.is_bf16_supported() else 'float16' # 'float32', 'bfloat16', or 'float16', the latter will auto implement a GradScaler
+        # 'float32', 'bfloat16', or 'float16', the latter will auto implement a GradScaler
+        dtype = 'bfloat16' if torch.cuda.is_available() and torch.cuda.is_bf16_supported() else \
+            'float16'
 
         # initialize a GradScaler. If enabled=False scaler is a no-op
-        self.scaler = torch.cuda.amp.GradScaler(enabled=(dtype == 'float16'))
+        self.scaler = torch.amp.GradScaler(enabled=(dtype == 'float16'))
 
-        torch.backends.cuda.matmul.allow_tf32 = True # allow tf32 on matmul
-        torch.backends.cudnn.allow_tf32 = True # allow tf32 on cudnn
+        torch.backends.cuda.matmul.allow_tf32 = True  # allow tf32 on matmul
+        torch.backends.cudnn.allow_tf32 = True  # allow tf32 on cudnn
 
         # 'cuda' if 'cuda' in device else 'cpu' # for later use in torch.autocast
-        device_type = self.config.run.device if type(self.config.run.device) == str else self.config.run.device.type
+        device_type = self.config.run.device if isinstance(self.config.run.device, str) else \
+            self.config.run.device.type
         # note: float16 data type will automatically use a GradScaler
-        ptdtype = {'float32': torch.float32, 'bfloat16': torch.bfloat16, 'float16': torch.float16}[dtype]
-        self.autocast_ctx = nullcontext() if device_type == 'cpu' else torch.amp.autocast(device_type=device_type, dtype=ptdtype)
+        ptdtype = {
+            'float32': torch.float32,
+            'bfloat16': torch.bfloat16,
+            'float16': torch.float16
+        }[dtype]
+        self.autocast_ctx = nullcontext() if device_type == 'cpu' else \
+            torch.amp.autocast(device_type=device_type, dtype=ptdtype)
 
         self.train_loader_iter = None
         self.val_loader_iter = None
@@ -104,16 +111,17 @@ class TrainerB:
         elif iter <= lr_decay_iters:
             ratio = (iter - warmup_iters) / (lr_decay_iters - warmup_iters)
             assert 0 <= ratio <= 1
-            coeff = 0.5 * (1.0 + math.cos(math.pi * ratio)) # range 0..1
+            coeff = 0.5 * (1.0 + math.cos(math.pi * ratio))  # range 0..1
             lr = min_lr + coeff * (lr - min_lr)
 
-        else: # it > lr_decay_iters:
+        else:  # it > lr_decay_iters:
             lr = min_lr
 
         return lr
 
     def forward_and_loss(self, micro_step, X, Y):
-        no_sync_ctx = self.model.no_sync() if (micro_step != self.micro_step_count - 1) else nullcontext()
+        no_sync_ctx = self.model.no_sync() if (micro_step != self.micro_step_count - 1) else \
+            nullcontext()
         with self.autocast_ctx, no_sync_ctx:
             logits = self.model(X)
             loss = torch.nn.functional.cross_entropy(logits.transpose(1, 2), Y, ignore_index=0)
@@ -163,7 +171,7 @@ class TrainerB:
             f'e: {time.strftime("%H:%M:%S", time.gmtime(elapsed))}',
             f'r: {time.strftime("%H:%M:%S", time.gmtime(remaining))}',
             f'{time.strftime("%M:%S", time.gmtime(per_iteration * 1000.0))} /Kit',
-            f'lr: {lr*1000:6.4f} e-3',
+            f'lr: {lr * 1000:6.4f} e-3',
             f't.loss: {loss_str}',
             f'v.loss: {val_loss:5.2f}',
             f'v.accu: {val_accuracy:.1%}',
@@ -180,7 +188,13 @@ class TrainerB:
 
     def log_wandb(self, train_loss, val_loss, val_accuracy, lr):
         import wandb
-        wandb.log({'train_loss': train_loss, 'val_loss': val_loss, 'val_accuracy': val_accuracy, 'lr': lr}, step=self.iter)
+        wandb.log({
+            'train_loss': train_loss,
+            'val_loss': val_loss,
+            'val_accuracy': val_accuracy,
+            'lr': lr},
+            step=self.iter
+        )
 
     def save_checkpoint(self, iter: int, val_loss: float):
         # skip checkpoint if this is not the main process
@@ -189,10 +203,11 @@ class TrainerB:
 
         is_wrapped = self.is_model_wrapped()
 
-        name = f"checkpoint.pt"
+        name = "checkpoint.pt"
         checkpoint_path = self.config.run.checkpoints_dir / name
 
-        torch.save({
+        torch.save(
+            {
                 'format': 'bert1',
                 'version': 1.0,
                 'iter': iter,
@@ -200,7 +215,9 @@ class TrainerB:
                 'optimizer': self.optimizer.state_dict(),
                 'val_loss': val_loss,
                 'config': self.config.to_dict(),
-            }, checkpoint_path)
+            },
+            checkpoint_path
+        )
 
     def is_model_wrapped(self):
         result = self.config.run.parallel_mode in ('dp', 'ddp')
@@ -305,9 +322,11 @@ class TrainerB:
         if self.config.run.parallel_mode == 'ddp':
             sampler = DistributedSampler(dataset)
             sampler.set_epoch(epoch)
-            loader = DataLoader(dataset, sampler=sampler, batch_size=batch_size, pin_memory=self.config.run.async_to_device)
+            loader = DataLoader(dataset, sampler=sampler, batch_size=batch_size,
+                                pin_memory=self.config.run.async_to_device)
         else:
-            loader = DataLoader(dataset, batch_size=batch_size, pin_memory=self.config.run.async_to_device)
+            loader = DataLoader(dataset, batch_size=batch_size,
+                                pin_memory=self.config.run.async_to_device)
 
         return loader
 

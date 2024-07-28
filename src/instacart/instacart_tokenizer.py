@@ -1,10 +1,14 @@
+"""
+Tokenizer for the Instacart dataset.
+"""
 import collections
+
+
 class InstacartTokenizer:
     def __init__(self, vocab_file, do_lower_case=True):
         with open(vocab_file, "r", encoding="utf-8") as reader:
             self.vocab = reader.readlines()
         self.vocab = load_vocab(vocab_file)
-
 
     def tokenize(self, text):
         """
