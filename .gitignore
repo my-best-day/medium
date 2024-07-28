@@ -16,7 +16,7 @@ local_config.ini
 # anywhere in the directory tree
 venv/
 tmp/
-movies/
-instacart/
+/movies
+/instacart
 **/checkpoints/
 **/logs/
