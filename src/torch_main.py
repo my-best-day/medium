@@ -47,7 +47,7 @@ def get_tokenizer(config):
     """Returns the tokenizer for the given case"""
     if config.run.case == 'movies':
         from transformers import BertTokenizer
-        path = config.run.base_dir / 'vocab/bert-it-vocab.txt'
+        path = config.run.base_dir / 'vocab/'  # bert-it-vocab.txt'
         path = str(path)
         result = BertTokenizer.from_pretrained(path, local_files_only=True)
     elif config.run.case == 'instacart':
@@ -194,13 +194,16 @@ def configure_optimizer(config, model):
         num_decay_params = sum(p.numel() for p in decay_params)
         num_nodecay_params = sum(p.numel() for p in no_decay_params)
         # pylint: disable=logging-fstring-interpolation
-        logging.info(f"num decayed parameter tensors: {len(decay_params)}, with {num_decay_params:,} parameters")
-        logging.info(f"num non-decayed parameter tensors: {len(no_decay_params)}, with {num_nodecay_params:,} parameters")
+        logging.info(f"num decayed parameter tensors: {len(decay_params)}, "
+                     f"with {num_decay_params:,} parameters")
+        logging.info(f"num non-decayed parameter tensors: {len(no_decay_params)}, "
+                     f"with {num_nodecay_params:,} parameters")
 
     # use fused if available and or device type is 'cuda'
     if config.run.fused_adamw:
         fused_available_ = 'fused' in inspect.signature(torch.optim.AdamW).parameters
-        device_type = config.run.device if isinstance(config.run.device, str) else config.run.device.type
+        device_type = config.run.device if isinstance(config.run.device, str) else \
+            config.run.device.type
         use_fused = fused_available_ and device_type == 'cuda'
     else:
         use_fused = False
