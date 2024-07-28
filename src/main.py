@@ -3,7 +3,6 @@ TBD
 """
 import os
 import logging
-import warnings
 import multiprocessing
 import torch
 
@@ -14,10 +13,10 @@ from args_to_config import get_config
 from torch_main import create_objects
 
 # Suppress specific warning
-warnings.filterwarnings("ignore", message="\'has_cuda\' is deprecated")
-warnings.filterwarnings("ignore", message="\'has_cudnn\' is deprecated")
-warnings.filterwarnings("ignore", message="\'has_mps\' is deprecated")
-warnings.filterwarnings("ignore", message="\'has_mkldnn\' is deprecated")
+# warnings.filterwarnings("ignore", message="\'has_cuda\' is deprecated")
+# warnings.filterwarnings("ignore", message="\'has_cudnn\' is deprecated")
+# warnings.filterwarnings("ignore", message="\'has_mps\' is deprecated")
+# warnings.filterwarnings("ignore", message="\'has_mkldnn\' is deprecated")
 
 
 # TODO: clustered ddp, use ddp_rank and ddp_local_rank
