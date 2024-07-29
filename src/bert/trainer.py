@@ -6,17 +6,15 @@ import logging
 import datetime
 from pathlib import Path
 from bert.bert import BERT
-from torch.utils.data import Dataset
 from torch.utils.data import DataLoader
 from torch.utils.tensorboard import SummaryWriter
 from bert.dump_sentences import DumpStentences
-from bert.scheduled_optim import ScheduledOptim
 from torch.utils.data.distributed import DistributedSampler
 
-from mtimer import MTimer
 from bert.timer import Timer
 from bert.dataset import BERTDatasetPrecached
 from utils.config import Config
+
 
 class BERTTrainer:
     def __init__(self,
@@ -70,7 +68,6 @@ class BERTTrainer:
             self.save_checkpoint(self.epoch + 1, -1, loss)
             logging.info(timer.step(f"Epoch {self.epoch}", restart=True))
 
-
     def train_epoch(self, epoch):
         current_lr = self.optimizer.param_groups[0]['lr']
         logging.info(f"Begin epoch {epoch} with learning rate {current_lr}")
@@ -87,16 +84,16 @@ class BERTTrainer:
             mlm_out = self.model(sentence)
 
             eval_flag = (i + 1) % self.config.train.val_interval == 0
-            val_flag = False # (i + 1) % (self.config.train.val_interval * 2) == 0
+            val_flag = False  # (i + 1) % (self.config.train.val_interval * 2) == 0
             if False and val_flag:
                 # import numpy as np
                 # np.set_printoptions(formatter={'float': '{:0.2f}'.format})
                 # print(mlm_out.detach().cpu().numpy()[0,0,:])
 
-                print("=" * 70 )
+                print("=" * 70)
                 predicted = self.dump_sentences.batched_debug(sentence, labels, mlm_out)
                 print("\n".join(predicted[:5]))
-                print("=" * 70 )
+                print("=" * 70)
 
             loss = self.criterion(mlm_out.transpose(1, 2), labels)
             losses.append(loss.item())
@@ -110,10 +107,11 @@ class BERTTrainer:
                 if val_flag:
                     self.training_summary(losses, val_loader)
                 else:
-                    self.training_summary(losses, None) # , val_loader)
+                    self.training_summary(losses, None)  # , val_loader)
 
             if Path('./stop_now').exists():
-                logging.info("Stopping in the middle of the epoch training because file './stop_now' exists.")
+                logging.info("Stopping in the middle of the epoch training because file "
+                             "'./stop_now' exists.")
                 break
 
         self.training_summary(losses, val_loader)
@@ -122,7 +120,7 @@ class BERTTrainer:
 
     def training_summary(self, losses, val_loader=None):
         # minimum number of batches before we start printing summary
-        n = 4 # self.config.train.val_interval // 2
+        n = 4  # self.config.train.val_interval // 2
 
         # skip summary if
         if len(losses) < n:
@@ -156,7 +154,8 @@ class BERTTrainer:
 
         n_losses = len(losses)
         if self.config.run.parallel_mode == 'ddp':
-            global_step = self.epoch * self.batch_count + n_losses * torch.distributed.get_world_size()
+            global_step = self.epoch * self.batch_count + \
+                n_losses * torch.distributed.get_world_size()
             n_losses *= torch.distributed.get_world_size()
         else:
             global_step = self.epoch * self.batch_count + n_losses
@@ -182,7 +181,6 @@ class BERTTrainer:
 
         text = " | ".join(items)
         logging.info(text)
-
 
     def _log_progress(self, global_step, loss, val_loss, val_accuracy):
         if not self.config.run.is_primary:
@@ -231,7 +229,6 @@ class BERTTrainer:
         accuracy = correct / total
         return loss, accuracy
 
-
     @staticmethod
     def estimate_remaining_time(passed: float, elapsed: float):
         if passed <= 0:
@@ -249,7 +246,8 @@ class BERTTrainer:
 
         global_step = epoch * self.batch_count + index
         start_time = time.time()
-        name = f"bert_epoch{epoch}_index{global_step}_{datetime.datetime.utcnow().timestamp():.0f}.pt"
+        timestamp = datetime.datetime.now(datetime.timezone.utc).timestamp()
+        name = f"bert_epoch{epoch}_index{global_step}_{timestamp:.0f}.pt"
         checkpoint_path = self.config.run.checkpoints_dir / name
 
         # initial version save epoch - 1
@@ -279,7 +277,6 @@ class BERTTrainer:
         ])
         logging.info(text)
 
-
     def load_checkpoint(self):
         path = Path(self.config.train.checkpoint)
         if not path.exists():
@@ -295,7 +292,8 @@ class BERTTrainer:
 
         is_wrapped = self.is_model_wrapped()
         # in DDP, load state dict into the underlying model, otherwise, load it directly
-        (self.model.module if is_wrapped else self.model).load_state_dict(checkpoint['model_state_dict'])
+        model_state = checkpoint['model_state_dict']
+        (self.model.module if is_wrapped else self.model).load_state_dict(model_state)
 
         self.optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
 
@@ -332,8 +330,8 @@ def get_lr_scheduler(optimizer, lr_scheduler_arg):
         gamma = float(gamma)
         return torch.optim.lr_scheduler.StepLR(optimizer, step_size=step_size, gamma=gamma)
     else:
-        raise Exception(f'Unknown learning rate scheduler {lr_scheduler_arg}. Valid values are warmup, cosine.')
-
+        raise Exception(f'Unknown learning rate scheduler {lr_scheduler_arg}. '
+                        'Valid values are warmup, cosine.')
 
 
 # class BERTTrainerSingleDataset(BERTTrainer):
@@ -356,7 +354,8 @@ def get_lr_scheduler(optimizer, lr_scheduler_arg):
 #             self.val_dataset = val_dataset
 #             self.loader = None
 #             self.val_loader = None
-#             super().__init__(model, logs_dir, checkpoints_dir, print_every, batch_size, learning_rate, epochs, tokenizer, device, d_model)
+#             super().__init__(model, logs_dir, checkpoints_dir, print_every, batch_size,
+#                              learning_rate, epochs, tokenizer, device, d_model)
 
 #     def before_epoch(self, epoch):
 #         if self.loader is None:
@@ -364,9 +363,11 @@ def get_lr_scheduler(optimizer, lr_scheduler_arg):
 #             self.batch_size = self.batch_size
 #             self.batch_count = self.ds_size // self.batch_size
 
-#             # self.loader = DataLoader(dataset, batch_size, num_workers=1, shuffle=True, pin_memory=True)
+#             # self.loader = DataLoader(dataset, batch_size, num_workers=1, shuffle=True,
+#                                        pin_memory=True)
 #             self.loader = DataLoader(self.dataset, self.batch_size, shuffle=True, pin_memory=True)
-#             self.val_loader = DataLoader(self.val_dataset, self.batch_size, shuffle=False, pin_memory=True)
+#             self.val_loader = DataLoader(self.val_dataset, self.batch_size, shuffle=False,
+#                                          pin_memory=True)
 
 #         return self.loader, self.val_loader
 
@@ -376,9 +377,8 @@ class BERTTrainerPreprocessedDatasets(BERTTrainer):
                  config: Config,
                  model: BERT,
                  optimizer,
-                tokenizer):
+                 tokenizer):
         super().__init__(config, model, optimizer, tokenizer)
-
 
     def before_epoch(self, epoch):
         dataset = self.get_dataset(epoch, True)
@@ -395,15 +395,18 @@ class BERTTrainerPreprocessedDatasets(BERTTrainer):
 
             val_sampler = DistributedSampler(val_dataset)
             val_sampler.set_epoch(epoch)
-            val_loader = DataLoader(val_dataset, sampler=val_sampler, batch_size=batch_size, shuffle=False, pin_memory=True)
+            val_loader = DataLoader(val_dataset, sampler=val_sampler, batch_size=batch_size,
+                                    shuffle=False, pin_memory=True)
         else:
             loader = DataLoader(dataset, batch_size=batch_size, pin_memory=True)
-            val_loader = DataLoader(val_dataset, batch_size=batch_size, shuffle=False, pin_memory=True)
+            val_loader = DataLoader(val_dataset, batch_size=batch_size, shuffle=False,
+                                    pin_memory=True)
 
         return loader, val_loader
 
     def get_dataset(self, epoch, train):
-        pattern = self.config.train.dataset_pattern if train else self.config.train.val_dataset_pattern
+        pattern = self.config.train.dataset_pattern if train else \
+            self.config.train.val_dataset_pattern
 
         pattern = str(self.config.run.datasets_dir / pattern)
         # add an optional .gz extension to the pattern
@@ -415,6 +418,7 @@ class BERTTrainerPreprocessedDatasets(BERTTrainer):
 
         logging.info(f"Epoch: {epoch} - Loading dataset from {dataset_file}")
 
-        percentage = self.config.train.dataset_percentage if train else self.config.train.val_dataset_percentage
+        percentage = self.config.train.dataset_percentage if train else \
+            self.config.train.val_dataset_percentage
         dataset = BERTDatasetPrecached(dataset_file, percentage)
         return dataset
