@@ -16,6 +16,9 @@ from bert.dataset import BERTDatasetPrecached
 from utils.config import Config
 
 
+# superseeded by TrainerB
+# no point in tidying up this class
+
 class BERTTrainer:
     def __init__(self,
                  config: Config,
@@ -28,6 +31,7 @@ class BERTTrainer:
         self.model = model
         self.tokenizer = tokenizer
 
+        # prints masked setneces with the predicted tokens
         self.dump_sentences = DumpStentences(tokenizer)
 
         # TODO: add to args & config
