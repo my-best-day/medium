@@ -37,7 +37,6 @@ class InstacartTokenizer:
     def convert_ids_to_tokens(self, ids):
         result = [self.token_id_to_product_name[token_id] for token_id in ids]
         return result
-        # return self.tokenizer.convert_ids_to_tokens(ids)
 
     def convert_tokens_to_string(self, tokens):
         raise NotImplementedError('convert_tokens_to_string is not implemented')

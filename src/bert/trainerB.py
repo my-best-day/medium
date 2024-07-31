@@ -7,9 +7,6 @@ from contextlib import nullcontext
 from bert.timer import Timer
 
 
-# TODO: adjust eval_interval, max_iters, val_iters by world_size (number of GPUs)
-
-
 class TrainerB:
     def __init__(self, config, model, optimizer, tokenizer):
         self.config = config
@@ -65,7 +62,7 @@ class TrainerB:
             # enter micro-step
             accumulated_loss = 0.0
             for micro_step in range(self.micro_step_count):
-                logits, loss = self.forward_and_loss(micro_step, X, Y)
+                logits, loss = self.forward_and_loss(micro_step, X, Y)  # NOSONAR
                 X, Y = self.get_batch('train')
                 loss /= self.micro_step_count
                 accumulated_loss += loss
@@ -119,19 +116,22 @@ class TrainerB:
 
         return lr
 
-    def forward_and_loss(self, micro_step, X, Y):
-        no_sync_ctx = self.model.no_sync() if (micro_step != self.micro_step_count - 1) else \
-            nullcontext()
+    def forward_and_loss(self, micro_step, X, Y):  # NOSONAR upper case X, Y denote batch tensors
+        # inhibit sync for all but the last micro-step
+        is_last_micro_step = micro_step == self.micro_step_count - 1
+        no_sync_ctx = self.model.no_sync() if is_last_micro_step else nullcontext()
+
         with self.autocast_ctx, no_sync_ctx:
             logits = self.model(X)
             loss = torch.nn.functional.cross_entropy(logits.transpose(1, 2), Y, ignore_index=0)
+
         return logits, loss
 
     def backward(self, loss):
         self.scaler.scale(loss).backward()
 
     def step(self):
-        if self.grad_clip != 0.0:
+        if self.grad_clip > 0.0:
             self.scaler.unscale_(self.optimizer)
             torch.nn.utils.clip_grad_norm_(self.model.parameters(), self.grad_clip)
         self.scaler.step(self.optimizer)
@@ -228,9 +228,10 @@ class TrainerB:
         losses = []
         total = 0
         correct = 0
+
         self.model.eval()
 
-        for val_iter in range(self.val_iters):
+        for _ in range(self.val_iters):
             X, Y = self.get_batch('val')
             logits = self.model(X)
             loss = torch.nn.functional.cross_entropy(logits.transpose(1, 2), Y, ignore_index=0)
@@ -243,6 +244,7 @@ class TrainerB:
             correct += torch.sum(Y == predicted).item()
 
         self.model.train()
+
         val_loss = sum(losses) / len(losses)
         val_accuracy = correct / total
 
@@ -270,20 +272,19 @@ class TrainerB:
             self._writer = SummaryWriter(str(self.config.run.logs_dir))
         return self._writer
 
-    # TODO: better scheme for iteration that works with DDP
     def get_batch(self, split):
         if split == 'train':
-            iter = self.train_loader_iter
+            iterator = self.train_loader_iter
         elif split == 'val':
-            iter = self.val_loader_iter
+            iterator = self.val_loader_iter
         else:
             raise ValueError(f"Unknown split: {split}")
 
-        if iter is None:
-            iter = self.get_data_iter(split)
+        if iterator is None:
+            iterator = self.get_data_iter(split)
 
         try:
-            X, Y = next(iter)
+            X, Y = next(iterator)
             X = X.to(self.config.run.device, non_blocking=self.config.run.async_to_device)
             Y = Y.to(self.config.run.device, non_blocking=self.config.run.async_to_device)
             return X, Y

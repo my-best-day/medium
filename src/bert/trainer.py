@@ -1,3 +1,8 @@
+"""
+superseeded by TrainerB
+no point in tidying up this class
+"""
+
 import glob
 import time
 import torch
@@ -15,9 +20,6 @@ from bert.timer import Timer
 from bert.dataset import BERTDatasetPrecached
 from utils.config import Config
 
-
-# superseeded by TrainerB
-# no point in tidying up this class
 
 class BERTTrainer:
     def __init__(self,

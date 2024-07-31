@@ -2,6 +2,7 @@ import torch
 from bert.bert import BERT
 from bert.masked_language_model import MaskedLanguageModel
 
+
 class BERTLM(torch.nn.Module):
     """
     BERT Language Model
