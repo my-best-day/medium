@@ -1,5 +1,6 @@
 import torch
 
+
 class MaskedLanguageModel(torch.nn.Module):
     """
     predicting origin token from masked input sequence

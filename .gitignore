@@ -1,18 +1,22 @@
+# files to be ignored
 **/*.pyc
-vocab
-data
-datasets
-datasets32
-tmp
-venv
-.DS_Store
 .ipynb_checkpoints
-checkpoints
-logs
-ignore
 .env
 settings.json
 config.ini
 local_config.ini
-movies
-instacart
+**/.DS_Store
+# soft links to directories
+/data
+/ignore
+
+
+# directories to be ignored
+# must end with / to avoid ignoring files with the same prefix
+# anywhere in the directory tree
+venv/
+tmp/
+/movies
+/instacart
+**/checkpoints/
+**/logs/

@@ -1,0 +1,16 @@
+[flake8]
+# Maximum allowed line length (default is 79)
+max-line-length = 100
+
+# Ignore specific errors and warnings
+ignore = E203, E266, W503
+# , E501 - line too long
+
+# Exclude specific directories from linting
+exclude = .git, __pycache__, build, dist
+
+# Enable specific plugins (if installed)
+select = C,E,F,W,B,B9,D,I
+
+# Specify paths to check (if not running from the root directory)
+# paths = src, tests

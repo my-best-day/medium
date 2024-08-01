@@ -1,7 +1,11 @@
+"""
+Define a BERT model.
+"""
 import torch
 import logging
 from bert.encoder_layer import EncoderLayer
 from bert.embedding import BERTEmbedding
+
 
 class BERT(torch.nn.Module):
     """
@@ -16,7 +20,8 @@ class BERT(torch.nn.Module):
         :param attn_heads: number of attention heads
         :param dropout: dropout rate
         """
-        logging.info(f"BERT: vocab_size: {vocab_size}, d_model: {d_model}, n_layers: {n_layers}, heads: {heads}, dropout: {dropout}")
+        logging.info("BERT: vocab_size: %s, d_model: %s, n_layers: %s, heads: %s, dropout: %s",
+                     vocab_size, d_model, n_layers, heads, dropout)
 
         super().__init__()
         self.d_model = d_model
@@ -28,11 +33,12 @@ class BERT(torch.nn.Module):
         self.feed_forward_hidden = d_model * 4
 
         # embedding for BERT, sum of positional, token embeddings
-        self.embedding = BERTEmbedding(vocab_size=vocab_size, embed_size=d_model, seq_len=self.max_len, dropout=dropout)
+        self.embedding = BERTEmbedding(vocab_size=vocab_size, embed_size=d_model,
+                                       seq_len=self.max_len, dropout=dropout)
 
         # multi-layers transformer blocks, deep network
         self.encoder_blocks = torch.nn.ModuleList(
-            [EncoderLayer(d_model, heads, d_model * 4, dropout) for _ in range(n_layers)])
+            [EncoderLayer(d_model, heads, d_model * 4, dropout, seq_len) for _ in range(n_layers)])
 
     def forward(self, x):
         # attention masking for padded token

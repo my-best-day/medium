@@ -1,5 +1,6 @@
 import torch
 
+
 class DumpStentences:
     def __init__(self, tokenizer):
         self.tokenizer = tokenizer
@@ -30,7 +31,8 @@ class DumpStentences:
                 token = self.convert_id_to_token(sentence[i])
             english.append(token)
         english = self.convert_tokens_to_string(english)
-        sentence2 = map(lambda i: labels[i] if sentence[i] == self.tokenizer.mask_token_id else sentence[i], range(len(sentence)))
+        sentence2 = map(lambda i: labels[i] if sentence[i] == self.tokenizer.mask_token_id else
+                        sentence[i], range(len(sentence)))
         source = self.tokenizer.convert_ids_to_tokens(sentence2)
         source = self.convert_tokens_to_string(source)
         return f"{english}\n{source}"
@@ -45,12 +47,14 @@ class DumpStentences:
         cleaned_text = re.sub(r'\[.*?\]\s*', '', text)
         return cleaned_text
 
+
 def describe_tensor(tensor):
     """
     Returns descriptive statistics for a 1D PyTorch tensor.
 
     :param tensor: A 1D PyTorch tensor.
-    :return: A dictionary with min, max, mean, standard deviation, 25th percentile, and 75th percentile.
+    :return: A dictionary with min, max, mean, standard deviation, 25th percentile, and 75th
+        percentile.
     """
     if tensor.dim() != 1:
         raise ValueError("Tensor must be 1-dimensional.")
@@ -65,6 +69,7 @@ def describe_tensor(tensor):
     }
 
     return desc_stats
+
 
 def describe(tensor):
     """

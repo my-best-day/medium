@@ -1,20 +1,28 @@
+"""Multi-Headed Attention module for a Transformer model."""
 import math
 import torch
 import logging
 
 use_flash = True
+is_gpt = True
+is_bert = False
+
 
 ### attention layers
 class MultiHeadedAttention(torch.nn.Module):
-
-    def __init__(self, heads, d_model, dropout=0.1):
+    """
+    Multi-Head Attention module for a Transformer model.
+    """
+    def __init__(self, heads, d_model, max_len, dropout=0.1):
         super(MultiHeadedAttention, self).__init__()
 
         assert d_model % heads == 0
         self.d_k = d_model // heads
         self.heads = heads
+        self.max_len = max_len
         self.dropout_value = dropout
         self.dropout = torch.nn.Dropout(dropout)
+        self.causal = is_gpt
         self.flash = use_flash and hasattr(torch.nn.functional, 'scaled_dot_product_attention')
         logging.info(f'Using flash: {self.flash}')
 
@@ -22,6 +30,11 @@ class MultiHeadedAttention(torch.nn.Module):
         self.key = torch.nn.Linear(d_model, d_model)
         self.value = torch.nn.Linear(d_model, d_model)
         self.output_linear = torch.nn.Linear(d_model, d_model)
+
+        if not self.flash and self.causal:
+            # print("WARNING: using slow attention. Flash Attention requires PyTorch >= 2.0")
+            # causal mask to ensure that attention is only applied to the left in the input sequence
+            self.register_buffer("bias", torch.tril(torch.ones(max_len, max_len)).view(1, 1, max_len, max_len))
 
     def forward(self, query, key, value, mask):
         """
@@ -41,10 +54,16 @@ class MultiHeadedAttention(torch.nn.Module):
         if self.flash:
             # TODO: dropout only if training
             training = True
-            context = torch.nn.functional.scaled_dot_product_attention(query, key, value, attn_mask=None, dropout_p=self.dropout_value if training else 0, is_causal=False)
+            dropout = self.dropout_value if training else 0
+            context = torch.nn.functional.scaled_dot_product_attention(query, key, value, attn_mask=None, dropout_p=dropout, is_causal=self.causal)
         else:
             # (batch_size, h, max_len, d_k) matmul (batch_size, h, d_k, max_len) --> (batch_size, h, max_len, max_len)
             scores = torch.matmul(query, key.permute(0, 1, 3, 2)) / math.sqrt(query.size(-1))
+
+            if is_gpt and not self.flash:
+                scores = scores.masked_fill(self.bias[:, :, :self.max_len, :self.max_len] == 0, float('-inf'))
+                # done below
+                # scores = torch.nn.functional.softmax(scores, dim=-1)
 
             # fill 0 mask with super small number so it wont affect the softmax weight
             # (batch_size, h, max_len, max_len)
