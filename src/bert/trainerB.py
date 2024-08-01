@@ -117,15 +117,34 @@ class TrainerB:
         return lr
 
     def forward_and_loss(self, micro_step, X, Y):  # NOSONAR upper case X, Y denote batch tensors
-        # inhibit sync for all but the last micro-step
-        is_last_micro_step = micro_step == self.micro_step_count - 1
-        no_sync_ctx = self.model.no_sync() if is_last_micro_step else nullcontext()
+        # in ddp, inhibit sync for all but the last micro-step
+        sync_ctx = self.get_sync_context(micro_step)
 
-        with self.autocast_ctx, no_sync_ctx:
+        with self.autocast_ctx, sync_ctx:
             logits = self.model(X)
             loss = torch.nn.functional.cross_entropy(logits.transpose(1, 2), Y, ignore_index=0)
 
         return logits, loss
+
+    def get_sync_context(self, micro_step):
+        """
+        Returns a context manager that inhibits gradient synchronization if we are using
+        DDP / the model supports that, AND, this is not last micro-step.
+        """
+        sync_context = None
+
+        # check if the model supports no_sync (typically if using DDP)
+        can_inhibit_syncing = callable(getattr(self.model, 'no_sync', None))
+
+        # check if this is not the last micro-step
+        is_not_last_micro_step = (micro_step != self.micro_step_count - 1)
+
+        if can_inhibit_syncing and is_not_last_micro_step:
+            sync_context = self.model.no_sync()
+        else:
+            sync_context = nullcontext()
+
+        return sync_context
 
     def backward(self, loss):
         self.scaler.scale(loss).backward()
