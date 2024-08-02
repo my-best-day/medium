@@ -1,7 +1,8 @@
 import torch
-from typing import Union
+from typing import Union, Optional
 from pathlib import Path
 from dataclasses import dataclass, fields
+
 
 class BaseConfig:
     def to_dict(self):
@@ -48,36 +49,38 @@ class TrainConfig(BaseConfig):
     lr_decay_iters: int
     max_iters: int
 
-    dropout: float = None
-    checkpoint: Path = None
+    dropout: Optional[float] = None
+    checkpoint: Optional[Path] = None
 
-
-    max_checkpoints: int = None
-    lr_scheduler: str = None
-
+    max_checkpoints: Optional[int] = None
+    lr_scheduler: Optional[str] = None
 
     def __post_init__(self):
         if self.start_epoch < 0:
-            raise Exception(f'Invalid start epoch {self.start_epoch}. Must be >= 0.')
+            raise ValueError(f'Invalid start epoch {self.start_epoch}. Must be >= 0.')
 
         if self.end_epoch < 0:
-            raise Exception(f'Invalid end epoch {self.end_epoch}. Must be >= 0.')
+            raise ValueError(f'Invalid end epoch {self.end_epoch}. Must be >= 0.')
 
         if self.start_epoch > self.end_epoch:
-            raise Exception(f'Invalid start epoch {self.start_epoch} and end epoch {self.end_epoch}. Start epoch must be <= end epoch.')
+            raise ValueError(f'Invalid start epoch {self.start_epoch} and end epoch '
+                             f'{self.end_epoch}. Start epoch must be <= end epoch.')
 
         # max_checkpoints at least 1
         if self.max_checkpoints < 1:
-            raise Exception(f'Invalid max checkpoints {self.max_checkpoints}. Must be >= 1.')
+            raise ValueError(f'Invalid max checkpoints {self.max_checkpoints}. Must be >= 1.')
 
         if self.checkpoint is not None and not self.checkpoint.exists():
-            raise Exception(f'Checkpoint {self.checkpoint} does not exist.')
+            raise ValueError(f'Checkpoint {self.checkpoint} does not exist.')
 
         # verify percentage is between 0 and 1
         if self.dataset_percentage < 0 or self.dataset_percentage > 1:
-            raise Exception(f'Invalid dataset percentage {self.dataset_percentage}. Must be between 0 and 1.')
+            raise ValueError(f'Invalid dataset percentage {self.dataset_percentage}. '
+                             'Must be between 0 and 1.')
+
         if self.val_dataset_percentage < 0 or self.val_dataset_percentage > 1:
-            raise Exception(f'Invalid val dataset percentage {self.val_dataset_percentage}. Must be between 0 and 1.')
+            raise ValueError(f'Invalid val dataset percentage {self.val_dataset_percentage}. '
+                             'Must be between 0 and 1.')
 
 
 @dataclass
@@ -113,14 +116,15 @@ class RunConfig(BaseConfig):
         if isinstance(self.base_dir, str):
             self.base_dir = Path(self.base_dir)
         if not self.base_dir.exists():
-            raise Exception(f'Base directory {self.base_dir} does not exist.')
+            raise ValueError(f'Base directory {self.base_dir} does not exist.')
 
         if self.parallel_mode not in ['single', 'dp', 'ddp']:
-            raise Exception(f'Invalid parallel mode {self.parallel_mode}. Valid values are single, dp, ddp.')
+            raise ValueError(f'Invalid parallel mode {self.parallel_mode}. '
+                             'Valid values are single, dp, ddp.')
 
         datasets_dir = self.base_dir / 'datasets'
         if not datasets_dir.exists():
-            raise Exception(f'Datasets directory {datasets_dir} does not exist.')
+            raise ValueError(f'Datasets directory {datasets_dir} does not exist.')
 
         self.run_dir = self.base_dir / 'runs' / f'run{self.run_id}'
         self.run_dir.mkdir(parents=True, exist_ok=True)
@@ -132,9 +136,10 @@ class RunConfig(BaseConfig):
         self.checkpoints_dir.mkdir(parents=False, exist_ok=True)
 
         if self.case not in ['movies', 'instacart']:
-            raise Exception(f'Invalid case {self.case}. Valid values are movies, instacart.')
+            raise ValueError(f'Invalid case {self.case}. Valid values are movies, instacart.')
 
         self.is_primary = self.local_rank in (None, 0)
+
 
 @dataclass
 class Config(BaseConfig):
