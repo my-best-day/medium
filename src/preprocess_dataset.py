@@ -1,17 +1,14 @@
 import gzip
 import random
-import pickle
 import msgpack
-
-
-from sklearn.model_selection import train_test_split
+from sklearn.model_selection import train_test_split  # type: ignore
 
 from transformers import BertTokenizer
 
-from bert.dataset import BERTDataset
+from bert.bert_dataset import BERTDataset
 from bert.timer import Timer
 
-from config import *
+from config import MAX_LEN
 
 
 def preprocess_and_cache_dataset(dataset, cache_file):
@@ -23,10 +20,7 @@ def preprocess_and_cache_dataset(dataset, cache_file):
         preprocessed_data.append(data)
     timer.print("preprocessed", True)
 
-    # with gzip.open(cache_file, 'wb') as f:
-    #     pickle.dump(preprocessed_data, f)   
-
-    lists =[]
+    lists = []
     for record in preprocessed_data:
         lists.append(record['bert_input'].tolist())
         lists.append(record['bert_label'].tolist())
@@ -39,20 +33,17 @@ def preprocess_and_cache_dataset(dataset, cache_file):
     timer.print("wrote msgpack.gz", True)
 
 
-
 def _main():
     random_seed = random.randint(0, 1000)
     print(f"Random seed: {random_seed}")
     random.seed(random_seed)
 
-    timer = Timer()
-    
-    ### loading all data into memory    
+    ### loading all data into memory
     corpus_movie_lines = './ignore/movie_lines.txt.gz'
 
     # lineId, characterId, movieId, character name, text
-    with gzip.open(corpus_movie_lines, 'rb') as l:
-        records = l.readlines()
+    with gzip.open(corpus_movie_lines, 'rb') as lines:
+        records = lines.readlines()
 
     ### splitting text using special lines
     # lineId -> text
@@ -70,7 +61,8 @@ def _main():
     train_lines, test_lines = train_test_split(lines, test_size=0.2, random_state=random_seed)
     val_lines, test_lines = train_test_split(test_lines, test_size=0.5, random_state=random_seed)
 
-    tokenizer = BertTokenizer.from_pretrained('./bert-it-1/bert-it-vocab.txt', local_files_only=True)
+    tokenizer = BertTokenizer.from_pretrained(
+        './bert-it-1/bert-it-vocab.txt', local_files_only=True)
 
     train_data = BERTDataset(
         train_lines, seq_len=MAX_LEN, tokenizer=tokenizer)
@@ -78,14 +70,12 @@ def _main():
         val_lines, seq_len=MAX_LEN, tokenizer=tokenizer)
     test_data = BERTDataset(
         test_lines, seq_len=MAX_LEN, tokenizer=tokenizer)
-    
+
     preprocess_and_cache_dataset(train_data, f'./datasets32/train_data_{random_seed}.msgpack.gz')
     preprocess_and_cache_dataset(val_data, f'./datasets32/val_data_{random_seed}.msgpack.gz')
     preprocess_and_cache_dataset(test_data, f'./datasets32/test_data_{random_seed}.msgpack.gz')
-    
+
 
 if __name__ == '__main__':
     for _ in range(10):
-        _main()     
-
-
+        _main()
