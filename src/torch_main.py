@@ -108,16 +108,8 @@ def get_bert_model(config, tokenizer):
 
 
 def get_trainer(config, model, optimizer, tokenizer):
-    from bert.trainerB import TrainerB
-    trainer = TrainerB(config, model, optimizer, tokenizer)
-    # NOSONAR
-    # from bert.trainer import BERTTrainerPreprocessedDatasets
-    # trainer = BERTTrainerPreprocessedDatasets(
-    #     config,
-    #     model,
-    #     optimizer,
-    #     tokenizer=tokenizer
-    # )
+    from bert.trainer import Trainer
+    trainer = Trainer(config, model, optimizer, tokenizer)
     return trainer
 
 

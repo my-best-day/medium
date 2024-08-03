@@ -1,418 +1,367 @@
-"""
-superseeded by TrainerB
-no point in tidying up this class
-"""
-
-import glob
 import time
 import torch
-import natsort
 import logging
-import datetime
 from pathlib import Path
-from bert.bert import BERT
-from torch.utils.data import DataLoader
-from torch.utils.tensorboard import SummaryWriter
-from bert.dump_sentences import DumpStentences
-from torch.utils.data.distributed import DistributedSampler
+from contextlib import nullcontext
 
 from bert.timer import Timer
-from bert.dataset import BERTDatasetPrecached
-from utils.config import Config
 
 
-class BERTTrainer:
-    def __init__(self,
-                 config: Config,
-                 model: BERT,
-                 optimizer,
-                 tokenizer,
-                 ):
+class Trainer:
+    def __init__(self, config, model, optimizer, tokenizer):
         self.config = config
-
         self.model = model
+        self.optimizer = optimizer
         self.tokenizer = tokenizer
 
-        # prints masked setneces with the predicted tokens
-        self.dump_sentences = DumpStentences(tokenizer)
+        # 'float32', 'bfloat16', or 'float16', the latter will auto implement a GradScaler
+        dtype = 'bfloat16' if torch.cuda.is_available() and torch.cuda.is_bf16_supported() else \
+            'float16'
 
-        # TODO: add to args & config
-        betas = (0.9, 0.999)
-        weight_decay = self.config.train.weight_decay
+        # initialize a GradScaler. If enabled=False scaler is a no-op
+        self.scaler = torch.amp.GradScaler(enabled=(dtype == 'float16'))
 
-        self.criterion = torch.nn.NLLLoss(ignore_index=0).to(self.config.run.device)
-        self.optimizer = torch.optim.Adam(
-            model.parameters(),
-            lr=self.config.train.learning_rate,
-            betas=betas,
-            weight_decay=weight_decay
-        )
-        self.lr_sched = get_lr_scheduler(self.optimizer, self.config.train.lr_scheduler)
+        torch.backends.cuda.matmul.allow_tf32 = True  # allow tf32 on matmul
+        torch.backends.cudnn.allow_tf32 = True  # allow tf32 on cudnn
 
-        self._writer = None
+        # 'cuda' if 'cuda' in device else 'cpu' # for later use in torch.autocast
+        device_type = self.config.run.device if isinstance(self.config.run.device, str) else \
+            self.config.run.device.type
+        # note: float16 data type will automatically use a GradScaler
+        ptdtype = {
+            'float32': torch.float32,
+            'bfloat16': torch.bfloat16,
+            'float16': torch.float16
+        }[dtype]
+        self.autocast_ctx = nullcontext() if device_type == 'cpu' else \
+            torch.amp.autocast(device_type=device_type, dtype=ptdtype)
 
-        self.start_epoch = 0
-        self.epoch = 0
+        self.train_loader_iter = None
+        self.val_loader_iter = None
 
-    @property
-    def writer(self):
-        if self._writer is None:
-            self._writer = SummaryWriter(str(self.config.run.logs_dir))
-        return self._writer
+        self.dataset_counters = {'train': 0, 'val': 0}
 
-    def before_epoch(self, epoch):
-        pass
+        # todo: take from config
+        self.start_iter = 0
+        self.iter = self.start_iter
+        self.micro_step_count = 1
+        self.grad_clip = 1.0
+        self.val_iters = 10
+        self.best_val_loss = float('inf')
 
     def train(self):
-        timer = Timer("epoch time")
-        for self.epoch in range(self.config.train.start_epoch, self.config.train.end_epoch):
-            if Path('./stop').exists() or Path('./stop_now').exists():
-                logging.info("Stopping training because file './stop' or './stop_now' exists.")
-                break
-            loss = self.train_epoch(self.epoch)
-            self.lr_sched.step()
-            self.save_checkpoint(self.epoch + 1, -1, loss)
-            logging.info(timer.step(f"Epoch {self.epoch}", restart=True))
-
-    def train_epoch(self, epoch):
-        current_lr = self.optimizer.param_groups[0]['lr']
-        logging.info(f"Begin epoch {epoch} with learning rate {current_lr}")
-
-        loader, val_loader = self.before_epoch(epoch)
-
+        timer = Timer()
         losses = []
-        self.train_timer = Timer()
-        for i, data in enumerate(loader):
-            sentence, labels = data
-            sentence = sentence.to(self.config.run.device)
-            labels = labels.to(self.config.run.device)
-
-            mlm_out = self.model(sentence)
-
-            eval_flag = (i + 1) % self.config.train.val_interval == 0
-            val_flag = False  # (i + 1) % (self.config.train.val_interval * 2) == 0
-            if False and val_flag:
-                # import numpy as np
-                # np.set_printoptions(formatter={'float': '{:0.2f}'.format})
-                # print(mlm_out.detach().cpu().numpy()[0,0,:])
-
-                print("=" * 70)
-                predicted = self.dump_sentences.batched_debug(sentence, labels, mlm_out)
-                print("\n".join(predicted[:5]))
-                print("=" * 70)
-
-            loss = self.criterion(mlm_out.transpose(1, 2), labels)
-            losses.append(loss.item())
-
+        X, Y = self.get_batch('train')
+        while self.should_continue_training():
+            lr = self.adjust_lr()
+            if self.should_estimate_loss():
+                elapsed = timer.elapsed(restart=False)
+                self.estimate_loss_and_log_progress(elapsed, losses, lr)
+                losses = []
+            # enter micro-step
+            accumulated_loss = 0.0
+            for micro_step in range(self.micro_step_count):
+                logits, loss = self.forward_and_loss(micro_step, X, Y)  # NOSONAR
+                X, Y = self.get_batch('train')
+                loss /= self.micro_step_count
+                accumulated_loss += loss
+                self.backward(loss)
+            # outside micro-step
+            logging.debug(f"loss: {accumulated_loss}")
+            losses.append(accumulated_loss)
+            self.step()
             self.optimizer.zero_grad()
-            loss.backward()
+            self.iter += 1
 
-            self.optimizer.step()
-
-            if eval_flag:
-                if val_flag:
-                    self.training_summary(losses, val_loader)
-                else:
-                    self.training_summary(losses, None)  # , val_loader)
-
-            if Path('./stop_now').exists():
-                logging.info("Stopping in the middle of the epoch training because file "
-                             "'./stop_now' exists.")
-                break
-
-        self.training_summary(losses, val_loader)
-
-        return loss
-
-    def training_summary(self, losses, val_loader=None):
-        # minimum number of batches before we start printing summary
-        n = 4  # self.config.train.val_interval // 2
-
-        # skip summary if
-        if len(losses) < n:
-            return
-
-        # average over the last n batches
-        loss = sum(losses[-n:]) / n
-        if self.config.run.parallel_mode == 'ddp':
-            loss = torch.tensor(loss).to(self.config.run.device)
-            torch.distributed.all_reduce(loss)
-            loss = loss.item() / torch.distributed.get_world_size()
-
-        if val_loader is None:
-            val_loss = None
-            val_accuracy = None
+    def should_continue_training(self):
+        if Path('./stop').exists() or Path('./stop_now').exists():
+            logging.info("Stopping training because file './stop' or './stop_now' exists.")
+            result = False
         else:
-            timer = Timer("val loss")
-            val_loss, val_accuracy = self.val_loss(val_loader)
-            if self.config.run.is_primary:
-                logging.info(timer.step())
+            result = self.iter < self.config.train.max_iters
+        return result
 
-            # if we are in DDP, we need to average the loss across all processes
-            if self.config.run.parallel_mode == 'ddp':
-                val_loss = torch.tensor(val_loss).to(self.config.run.device)
-                torch.distributed.all_reduce(val_loss)
-                val_loss = val_loss.item() / torch.distributed.get_world_size()
+    def should_estimate_loss(self):
+        iters = self.iter - self.start_iter
+        result = iters % self.config.train.val_interval == 0
+        return result
 
-                val_accuracy = torch.tensor(val_accuracy).to(self.config.run.device)
-                torch.distributed.all_reduce(val_accuracy)
-                val_accuracy = val_accuracy.item() / torch.distributed.get_world_size()
+    def adjust_lr(self):
+        lr = self.get_lr(self.iter)
+        for param_group in self.optimizer.param_groups:
+            param_group['lr'] = lr
+        return lr
 
-        n_losses = len(losses)
-        if self.config.run.parallel_mode == 'ddp':
-            global_step = self.epoch * self.batch_count + \
-                n_losses * torch.distributed.get_world_size()
-            n_losses *= torch.distributed.get_world_size()
+    def get_lr(self, iter):
+        import math
+
+        lr = self.config.train.learning_rate
+        min_lr = self.config.train.min_learning_rate
+
+        warmup_iters = self.config.train.warmup_iters
+        lr_decay_iters = self.config.train.lr_decay_iters
+
+        if iter < warmup_iters:
+            lr = iter * lr / warmup_iters
+
+        elif iter <= lr_decay_iters:
+            ratio = (iter - warmup_iters) / (lr_decay_iters - warmup_iters)
+            assert 0 <= ratio <= 1
+            coeff = 0.5 * (1.0 + math.cos(math.pi * ratio))  # range 0..1
+            lr = min_lr + coeff * (lr - min_lr)
+
+        else:  # it > lr_decay_iters:
+            lr = min_lr
+
+        return lr
+
+    def forward_and_loss(self, micro_step, X, Y):  # NOSONAR upper case X, Y denote batch tensors
+        # in ddp, inhibit sync for all but the last micro-step
+        sync_ctx = self.get_sync_context(micro_step)
+
+        with self.autocast_ctx, sync_ctx:
+            logits = self.model(X)
+            loss = torch.nn.functional.cross_entropy(logits.transpose(1, 2), Y, ignore_index=0)
+
+        return logits, loss
+
+    def get_sync_context(self, micro_step):
+        """
+        Returns a context manager that inhibits gradient synchronization if we are using
+        DDP / the model supports that, AND, this is not last micro-step.
+        """
+        sync_context = None
+
+        # check if the model supports no_sync (typically if using DDP)
+        can_inhibit_syncing = callable(getattr(self.model, 'no_sync', None))
+
+        # check if this is not the last micro-step
+        is_not_last_micro_step = (micro_step != self.micro_step_count - 1)
+
+        if can_inhibit_syncing and is_not_last_micro_step:
+            sync_context = self.model.no_sync()
         else:
-            global_step = self.epoch * self.batch_count + n_losses
-        # global_step *= self.config.train.batch_size
+            sync_context = nullcontext()
 
-        n_losses = min(n_losses, self.batch_count)
-        passed = n_losses / self.batch_count
+        return sync_context
 
-        elapsed = self.train_timer.elapsed()
-        items = [
-            time.strftime('%H:%M:%S', time.gmtime(elapsed)),
-            f"(r:{self.estimate_remaining_time(passed, elapsed)})",
-            f"Epocn {self.epoch}",
-            f"{n_losses} / {self.batch_count} ({passed:6.2%})",
-            f"loss: {loss:6.2f}",
-        ]
-        if val_loss is not None:
-            items.append(f"Eval loss: {val_loss:6.2f}")
-        if val_accuracy is not None:
-            items.append(f"Eval accuracy: {val_accuracy:6.2%}")
+    def backward(self, loss):
+        self.scaler.scale(loss).backward()
 
-        self._log_progress(global_step, loss, val_loss, val_accuracy)
+    def step(self):
+        if self.grad_clip > 0.0:
+            self.scaler.unscale_(self.optimizer)
+            torch.nn.utils.clip_grad_norm_(self.model.parameters(), self.grad_clip)
+        self.scaler.step(self.optimizer)
+        self.scaler.update()
 
-        text = " | ".join(items)
-        logging.info(text)
+    def estimate_loss_and_log_progress(self, elapsed, train_losses, lr):
+        train_loss = sum(train_losses) / len(train_losses) if len(train_losses) > 0 else None
+        val_loss, val_accuracy = self.estimate_val_loss()
+        if self.config.run.is_primary:
+            self.log_progress(elapsed, train_loss, val_loss, val_accuracy, lr)
 
-    def _log_progress(self, global_step, loss, val_loss, val_accuracy):
-        if not self.config.run.is_primary:
-            return
+            if val_loss < self.best_val_loss and self.iter > self.config.train.val_interval:
+                self.best_val_loss = val_loss
+                self.save_checkpoint(self.iter, val_loss)
 
-        self.writer.add_scalar("train_loss", loss, global_step=global_step)
+    def should_save_checkpoint(self, val_loss):
+        if val_loss >= self.best_val_loss:
+            return False
+        iters = self.iter - self.start_iter
+        if iters < self.val_iters:
+            return False
+        return True
+
+    def log_progress(self, elapsed, train_loss, val_loss, val_accuracy, lr):
+        self.log_tensorboard(train_loss, val_loss, val_accuracy, lr)
+
         if self.config.run.wandb:
-            import wandb
-            wandb.log({"train_loss": loss}, step=global_step)
-        if val_loss is not None:
-            self.writer.add_scalar("val_loss", val_loss, global_step=global_step)
-            if self.config.run.wandb:
-                wandb.log({"val_loss": val_loss}, step=global_step)
-        if val_accuracy is not None:
-            self.writer.add_scalar("val_accuracy", val_accuracy, global_step=global_step)
-            if self.config.run.wandb:
-                wandb.log({"val_accuracy": val_accuracy}, step=global_step)
+            self.log_wandb(train_loss, val_loss, val_accuracy, lr)
 
-    def val_loss(self, loader):
-        losses = []
-        total = 0
-        correct = 0
-        with torch.no_grad():
-            self.model.eval()
-            for i, data in enumerate(loader):
-                sentence, labels = data
-                sentence = sentence.to(self.config.run.device)
-                labels = labels.to(self.config.run.device)
+        num_digits = len(f'{self.config.train.max_iters:,}')
+        per_iteration = (elapsed / self.iter) if self.iter > 0 else 0.5
+        remaining = per_iteration * (self.config.train.max_iters - self.iter)
+        loss_str = 'None ' if train_loss is None else f'{train_loss:5.2f}'
+        items = [
+            f'{self.iter / self.config.train.max_iters:4.0%}',
+            f'{self.iter:>{num_digits},}/{self.config.train.max_iters:,}',
+            f'e: {time.strftime("%H:%M:%S", time.gmtime(elapsed))}',
+            f'r: {time.strftime("%H:%M:%S", time.gmtime(remaining))}',
+            f'{time.strftime("%M:%S", time.gmtime(per_iteration * 1000.0))} /Kit',
+            f'lr: {lr * 1000:6.4f} e-3',
+            f't.loss: {loss_str}',
+            f'v.loss: {val_loss:5.2f}',
+            f'v.accu: {val_accuracy:.1%}',
+        ]
+        msg = ' | '.join(items)
+        logging.info(msg)
 
-                mlm_out = self.model(sentence)
+    def log_tensorboard(self, train_loss, val_loss, val_accuracy, lr):
+        if train_loss is not None:
+            self.writer.add_scalar('train_loss', train_loss, self.iter)
+        self.writer.add_scalar('val_loss', val_loss, self.iter)
+        self.writer.add_scalar('val_accuracy', val_accuracy, self.iter)
+        self.writer.add_scalar('lr', lr, self.iter)
 
-                loss = self.criterion(mlm_out.transpose(1, 2), labels)
-                losses.append(loss.item())
+    def log_wandb(self, train_loss, val_loss, val_accuracy, lr):
+        import wandb
+        wandb.log({
+            'train_loss': train_loss,
+            'val_loss': val_loss,
+            'val_accuracy': val_accuracy,
+            'lr': lr},
+            step=self.iter
+        )
 
-                # calculate accuracy
-                _, predicted = torch.max(mlm_out.data, 2)
-                total += labels.size(0) * labels.size(1)
-                correct += (predicted == labels).sum().item()
-
-                if i == 0 and self.config.run.case == 'movies' and (self.epoch + 1) % 10 == 0:
-                    predicted = self.dump_sentences.batched_debug(sentence, labels, mlm_out)
-                    logging.info("\n".join(predicted[:30]))
-
-        self.model.train()
-        loss = sum(losses) / len(losses)
-        accuracy = correct / total
-        return loss, accuracy
-
-    @staticmethod
-    def estimate_remaining_time(passed: float, elapsed: float):
-        if passed <= 0:
-            return "00:00:00"
-        remaining = elapsed / passed - elapsed
-        formatted = time.strftime('%H:%M:%S', time.gmtime(remaining))
-        return formatted
-
-    def save_checkpoint(self, epoch: int, index: int, loss: float):
+    def save_checkpoint(self, iter: int, val_loss: float):
         # skip checkpoint if this is not the main process
         if not self.config.run.is_primary:
             return
 
         is_wrapped = self.is_model_wrapped()
 
-        global_step = epoch * self.batch_count + index
-        start_time = time.time()
-        timestamp = datetime.datetime.now(datetime.timezone.utc).timestamp()
-        name = f"bert_epoch{epoch}_index{global_step}_{timestamp:.0f}.pt"
+        name = "checkpoint.pt"
         checkpoint_path = self.config.run.checkpoints_dir / name
 
-        # initial version save epoch - 1
-        # 0.1 fixed the epoch
-        # 0.2 added lr_sched state
-        torch.save({
-            'version': 0.2,
-            'epoch': epoch,
-            'model_state_dict': (self.model.module if is_wrapped else self.model).state_dict(),
-            'optimizer_state_dict': self.optimizer.state_dict(),
-            'scheduler_state_dict': self.lr_sched.state_dict(),
-            'loss': loss
-        }, checkpoint_path)
-
-        # remove old checkpoints
-        checkpoints = natsort.natsorted(self.config.run.checkpoints_dir.glob("*.pt"))
-        if len(checkpoints) > self.config.train.max_checkpoints:
-            for checkpoint in checkpoints[:-self.config.train.max_checkpoints]:
-                checkpoint.unlink()
-
-        text = "\n".join([
-            "",
-            "=" * 70,
-            f"Model saved as '{name}' for {time.time() - start_time:.2f} secs",
-            "=" * 70,
-            ""
-        ])
-        logging.info(text)
-
-    def load_checkpoint(self):
-        path = Path(self.config.train.checkpoint)
-        if not path.exists():
-            raise ValueError(f"Checkpoint {path} does not exist.")
-        logging.info(f"Restoring model {path}")
-
-        # use map_location='cpu' if GPU memory an issue (broadcasting required in that case!)
-        checkpoint = torch.load(path, map_location=self.config.run.device)
-
-        version = checkpoint.get('version', 0)
-        self.epoch = checkpoint['epoch'] + (1 if version == 0 else 0)
-        self.config.train.start_epoch = self.epoch
-
-        is_wrapped = self.is_model_wrapped()
-        # in DDP, load state dict into the underlying model, otherwise, load it directly
-        model_state = checkpoint['model_state_dict']
-        (self.model.module if is_wrapped else self.model).load_state_dict(model_state)
-
-        self.optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
-
-        if version >= 0.2:
-            self.lr_sched.load_state_dict(checkpoint['scheduler_state_dict'])
-
-        if self.config.run.parallel_mode == 'ddp':
-            for param in self.model.parameters():
-                torch.distributed.broadcast(param.data, src=0)
-
-        logging.info("=" * 70)
-        logging.info("Model is restored.")
-        logging.info("=" * 70)
+        torch.save(
+            {
+                'format': 'bert1',
+                'version': 1.0,
+                'iter': iter,
+                'model': (self.model.module if is_wrapped else self.model).state_dict(),
+                'optimizer': self.optimizer.state_dict(),
+                'val_loss': val_loss,
+                'config': self.config.to_dict(),
+            },
+            checkpoint_path
+        )
 
     def is_model_wrapped(self):
         result = self.config.run.parallel_mode in ('dp', 'ddp')
         return result
 
+    @torch.no_grad()
+    def estimate_val_loss(self):
+        losses = []
+        total = 0
+        correct = 0
 
-class LRSchedulerNoop:
-    def step(self):
-        pass
+        self.model.eval()
 
-    def state_dict(self):
-        return {}
+        for _ in range(self.val_iters):
+            X, Y = self.get_batch('val')
+            logits = self.model(X)
+            loss = torch.nn.functional.cross_entropy(logits.transpose(1, 2), Y, ignore_index=0)
+            losses.append(loss)
+            logging.debug('val loss: %f', loss)
 
+            probabilities = torch.softmax(logits, dim=-1)
+            _, predicted = torch.max(probabilities, dim=-1)
+            total += Y.size(0) * Y.size(1)
+            correct += torch.sum(Y == predicted).item()
 
-def get_lr_scheduler(optimizer, lr_scheduler_arg):
-    if lr_scheduler_arg is None:
-        return LRSchedulerNoop()
-    if lr_scheduler_arg.startswith('steplr'):
-        _, step_size, gamma = lr_scheduler_arg.split(':')
-        step_size = int(step_size)
-        gamma = float(gamma)
-        return torch.optim.lr_scheduler.StepLR(optimizer, step_size=step_size, gamma=gamma)
-    else:
-        raise Exception(f'Unknown learning rate scheduler {lr_scheduler_arg}. '
-                        'Valid values are warmup, cosine.')
+        self.model.train()
 
+        val_loss = sum(losses) / len(losses)
+        val_accuracy = correct / total
 
-# class BERTTrainerSingleDataset(BERTTrainer):
+        val_loss = self.sync_up(val_loss)
+        val_accuracy = self.sync_up(val_accuracy)
 
-#     def __init__(self,
-#                  model: BERT,
-#                  logs_dir: Path,
-#                  checkpoints_dir: Path,
-#                  print_every: int,
-#                  batch_size: int,
-#                  learning_rate: float,
-#                  epochs: int,
-#                  tokenizer,
-#                  device: str,
-#                  train_dataset: Dataset,
-#                  val_dataset: Dataset,
-#                  d_model: int,
-#                  ):
-#             self.train_dataset = train_dataset
-#             self.val_dataset = val_dataset
-#             self.loader = None
-#             self.val_loader = None
-#             super().__init__(model, logs_dir, checkpoints_dir, print_every, batch_size,
-#                              learning_rate, epochs, tokenizer, device, d_model)
+        return val_loss, val_accuracy
 
-#     def before_epoch(self, epoch):
-#         if self.loader is None:
-#             self.ds_size = len(self.dataset)
-#             self.batch_size = self.batch_size
-#             self.batch_count = self.ds_size // self.batch_size
+    def sync_up(self, item):
+        if self.config.run.parallel_mode == 'ddp':
+            if isinstance(item, torch.Tensor):
+                tensor = item
+            else:
+                tensor = torch.tensor(item).to(self.config.run.device)
+            torch.distributed.all_reduce(tensor)
+            result = tensor.item() / torch.distributed.get_world_size()
+        else:
+            result = item.item() if isinstance(item, torch.Tensor) else item
+        return result
 
-#             # self.loader = DataLoader(dataset, batch_size, num_workers=1, shuffle=True,
-#                                        pin_memory=True)
-#             self.loader = DataLoader(self.dataset, self.batch_size, shuffle=True, pin_memory=True)
-#             self.val_loader = DataLoader(self.val_dataset, self.batch_size, shuffle=False,
-#                                          pin_memory=True)
+    @property
+    def writer(self):
+        from torch.utils.tensorboard import SummaryWriter
+        if not hasattr(self, '_writer'):
+            self._writer = SummaryWriter(str(self.config.run.logs_dir))
+        return self._writer
 
-#         return self.loader, self.val_loader
+    def get_batch(self, split):
+        if split == 'train':
+            iterator = self.train_loader_iter
+        elif split == 'val':
+            iterator = self.val_loader_iter
+        else:
+            raise ValueError(f"Unknown split: {split}")
 
+        if iterator is None:
+            iterator = self.get_data_iter(split)
 
-class BERTTrainerPreprocessedDatasets(BERTTrainer):
-    def __init__(self,
-                 config: Config,
-                 model: BERT,
-                 optimizer,
-                 tokenizer):
-        super().__init__(config, model, optimizer, tokenizer)
+        try:
+            X, Y = next(iterator)
+            X = X.to(self.config.run.device, non_blocking=self.config.run.async_to_device)
+            Y = Y.to(self.config.run.device, non_blocking=self.config.run.async_to_device)
+            return X, Y
+        except StopIteration:
+            # Handle the case when the iterator is exhausted
+            # For example, you can reset the iterator or raise an exception
+            if split == 'train':
+                self.train_loader_iter = None
+            elif split == 'val':
+                self.val_loader_iter = None
+            else:
+                raise ValueError(f"Unknown split: {split}")
+            return self.get_batch(split)
 
-    def before_epoch(self, epoch):
-        dataset = self.get_dataset(epoch, True)
-        ds_size = len(dataset)
+    def get_data_iter(self, split):
+        data_loader = self.get_data_loader(split)
+        data_iter = iter(data_loader)
+        if split == 'train':
+            self.train_loader_iter = data_iter
+        elif split == 'val':
+            self.val_loader_iter = data_iter
+        else:
+            raise ValueError(f"Unknown split: {split}")
+        return data_iter
+
+    def get_data_loader(self, split):
+        from torch.utils.data import DataLoader
+        from torch.utils.data.distributed import DistributedSampler
+
+        epoch = self.dataset_counters[split]
+        self.dataset_counters[split] += 1
+
+        dataset = self.get_dataset(epoch, split)
         batch_size = self.config.train.batch_size
-        self.batch_count = ds_size // batch_size
-
-        val_dataset = self.get_dataset(epoch, False)
 
         if self.config.run.parallel_mode == 'ddp':
             sampler = DistributedSampler(dataset)
             sampler.set_epoch(epoch)
-            loader = DataLoader(dataset, sampler=sampler, batch_size=batch_size, pin_memory=True)
-
-            val_sampler = DistributedSampler(val_dataset)
-            val_sampler.set_epoch(epoch)
-            val_loader = DataLoader(val_dataset, sampler=val_sampler, batch_size=batch_size,
-                                    shuffle=False, pin_memory=True)
+            loader = DataLoader(dataset, sampler=sampler, batch_size=batch_size,
+                                pin_memory=self.config.run.async_to_device)
         else:
-            loader = DataLoader(dataset, batch_size=batch_size, pin_memory=True)
-            val_loader = DataLoader(val_dataset, batch_size=batch_size, shuffle=False,
-                                    pin_memory=True)
+            loader = DataLoader(dataset, batch_size=batch_size,
+                                pin_memory=self.config.run.async_to_device)
 
-        return loader, val_loader
+        return loader
 
-    def get_dataset(self, epoch, train):
-        pattern = self.config.train.dataset_pattern if train else \
-            self.config.train.val_dataset_pattern
+    def get_dataset(self, epoch, split):
+        import glob
+        from bert.dataset import BERTDatasetPrecached
+
+        if split == 'train':
+            pattern = self.config.train.dataset_pattern
+            percentage = self.config.train.dataset_percentage
+        elif split == 'val':
+            pattern = self.config.train.val_dataset_pattern
+            percentage = self.config.train.val_dataset_percentage
+        else:
+            raise ValueError(f"Unknown split: {split}")
 
         pattern = str(self.config.run.datasets_dir / pattern)
         # add an optional .gz extension to the pattern
@@ -422,9 +371,7 @@ class BERTTrainerPreprocessedDatasets(BERTTrainer):
         dataset_files = sorted(dataset_files)
         dataset_file = dataset_files[epoch % len(dataset_files)]
 
-        logging.info(f"Epoch: {epoch} - Loading dataset from {dataset_file}")
+        logging.debug(f"Epoch: {epoch} - Loading dataset from {dataset_file}")
 
-        percentage = self.config.train.dataset_percentage if train else \
-            self.config.train.val_dataset_percentage
         dataset = BERTDatasetPrecached(dataset_file, percentage)
         return dataset
