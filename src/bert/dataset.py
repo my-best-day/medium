@@ -4,17 +4,18 @@ import torch
 import random
 import pickle
 import msgpack
-import logging
 import itertools
 from torch.utils.data import Dataset
 
-from bert.timer import Timer
 
 class BERTDatasetPrecached(Dataset):
+    """
+    Dataset for pre-cached BERT inputs and labels.
+    Masking is already done in the cached data.
+    """
     def __init__(self, path, percentage=1.0):
         self._type = None
         self._percentage = percentage
-        # timer = Timer("load precached dataset")
         opener = gzip.open if path.endswith('.gz') else open
         with opener(path, 'rb') as f:
             if re.search(r'\.pkl(\.gz)?$', path):
@@ -26,6 +27,7 @@ class BERTDatasetPrecached(Dataset):
                 self.cached_data = msgpack.unpackb(packed_data, raw=False)
             else:
                 raise ValueError(f"Unknown file type: {path}")
+        if percentage < 1.0:
             self.cached_data = self.cached_data[:int(len(self.cached_data) * percentage)]
         # logging.info(timer.step(f"loaded precached dataset {path}"))
 
@@ -54,6 +56,7 @@ class BERTDatasetPrecached(Dataset):
         else:
             raise ValueError(f"Unknown type: {self._type}")
 
+
 class BERTDataset(Dataset):
     def __init__(self, lines, tokenizer, seq_len):
 
@@ -74,7 +77,7 @@ class BERTDataset(Dataset):
         sentence, label = self.random_word2(line)
 
         # Step 3: Adding CLS and SEP tokens to the start and end of sentences
-         # Adding PAD token for labels
+        # Adding PAD token for labels
         t1 = [self.tokenizer.vocab['[CLS]']] + sentence + [self.tokenizer.vocab['[SEP]']]
         t1_label = [self.tokenizer.vocab['[PAD]']] + label + [self.tokenizer.vocab['[PAD]']]
 
@@ -128,10 +131,10 @@ class BERTDataset(Dataset):
 
         # flattening
         output = list(itertools.chain(*[[x] if not isinstance(x, list) else x for x in output]))
-        output_label = list(itertools.chain(*[[x] if not isinstance(x, list) else x for x in output_label]))
+        output_label = list(itertools.chain(*[[x] if not isinstance(x, list) else
+                                              x for x in output_label]))
         assert len(output) == len(output_label)
         return output, output_label
-
 
     def random_word2(self, sentence):
         tokens = sentence.split()
@@ -173,7 +176,8 @@ class BERTDataset(Dataset):
 
         # Flattening multi-word tokens
         output = list(itertools.chain(*[[x] if not isinstance(x, list) else x for x in output]))
-        output_label = list(itertools.chain(*[[x] if not isinstance(x, list) else x for x in output_label]))
+        output_label = list(itertools.chain(*[[x] if not isinstance(x, list) else
+                                              x for x in output_label]))
 
         assert len(output) == len(output_label)
         return output, output_label
