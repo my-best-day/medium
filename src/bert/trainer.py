@@ -352,7 +352,7 @@ class Trainer:
 
     def get_dataset(self, epoch, split):
         import glob
-        from bert.dataset import BERTDatasetPrecached
+        from bert.bert_dataset_precached import BERTDatasetPrecached
 
         if split == 'train':
             pattern = self.config.train.dataset_pattern
