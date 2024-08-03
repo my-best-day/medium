@@ -1,12 +1,11 @@
 import glob
 import torch
-from bert.dataset import BERTDatasetPrecached
+from bert.bert_dataset import BERTDatasetPrecached
 from bert.dump_sentences import describe
 from bert.timer import Timer
 
-from config import *
-
 device = 'cuda' if torch.cuda.is_available() else 'cpu'
+
 
 def _main():
     ### loading all data into memory
@@ -18,7 +17,6 @@ def _main():
     print(f"Loading dataset from {dataset_file}")
 
     dataset = BERTDatasetPrecached(dataset_file)
-   
 
     lengths = []
 
@@ -58,6 +56,6 @@ def _main():
     describe(lengths)
     total_timer.print("total time")
 
+
 if __name__ == '__main__':
     _main()
-
