@@ -8,8 +8,6 @@ from transformers import BertTokenizer
 from bert.bert_dataset import BERTDataset
 from bert.timer import Timer
 
-from config import MAX_LEN
-
 
 def preprocess_and_cache_dataset(dataset, cache_file):
     timer = Timer("preprocess_and_cache_dataset")
@@ -31,6 +29,9 @@ def preprocess_and_cache_dataset(dataset, cache_file):
         packed_data = msgpack.packb(lists)
         file.write(packed_data)
     timer.print("wrote msgpack.gz", True)
+
+
+MAX_LEN = 32
 
 
 def _main():

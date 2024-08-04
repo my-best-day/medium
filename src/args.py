@@ -103,6 +103,7 @@ def add_train_arguments(parser: configargparse.ArgumentParser):
                         help='Path to a specific checkpoint.')
     parser.add_argument('--start_epoch', '--se', type=int, default=0,
                         help='Epoch to start training from')
+    # ee deprecated
     parser.add_argument('--end-epoch', '--ee', type=int, default=19, help='Epoch to end training')
     parser.add_argument('--dataset-pattern', type=str, default=None, help='Dataset pattern')
     parser.add_argument('--val-dataset-pattern', type=str, default=None, help='Validation pattern')
@@ -139,7 +140,7 @@ def add_run_arguments(parser: configargparse.ArgumentParser):
     parser.add_argument('--local-rank', type=int, default=None,
                         help='Local rank. Necessary for using the torch.distributed.launch.')
     parser.add_argument('--case', type=str, default=None,
-                        choices=['movies', 'instacart', 'charles'], help='Case to run')
+                        choices=['movies', 'instacart', 'dickens'], help='Case to run')
     parser.add_argument('--nproc', type=int, default=1,
                         help='Number of processes for distributed training.')
 

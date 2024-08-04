@@ -47,18 +47,15 @@ def wrap_parallel_model(config, model):
 
 def get_tokenizer(config):
     """Returns the tokenizer for the given case"""
-    if config.run.case == 'movies':
+    if config.run.case == 'movies' or config.run.case == 'dickens':
         from transformers import BertTokenizer
-        path = config.run.base_dir / 'vocab/'  # bert-it-vocab.txt'
+        path = config.run.base_dir / 'vocab/'
         path = str(path)
         result = BertTokenizer.from_pretrained(path, local_files_only=True)
     elif config.run.case == 'instacart':
         from instacart.instacart_tokenizer import InstacartTokenizer
         path = config.run.base_dir / 'vocab' / 'instacart_vocab.txt'
         result = InstacartTokenizer(path)
-    elif config.run.case == 'charles':
-        from transformers import GPT2Tokenizer
-        result = GPT2Tokenizer.from_pretrained('gpt2')
     else:
         raise ValueError('Unknown case. %s', config.run.case)
     return result
@@ -116,7 +113,7 @@ def get_trainer(config, model, optimizer, tokenizer):
 def create_objects_and_trainer(config):
     init_mode_set_device(config)
 
-    # right tokenizer by case (movies, instacart, charles)
+    # right tokenizer by case (movies, instacart, dickens)
     tokenizer = get_tokenizer(config)
 
     # BERT lang model / GPT (pending...)

@@ -18,5 +18,6 @@ venv/
 tmp/
 /movies
 /instacart
+/dickens
 **/checkpoints/
 **/logs/

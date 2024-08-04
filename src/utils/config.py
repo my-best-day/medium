@@ -25,10 +25,10 @@ class BaseConfig:
 
 @dataclass
 class ModelConfig(BaseConfig):
-    seq_len: int = None
-    d_model: int = None
-    n_layers: int = None
-    heads: int = None
+    seq_len: Optional[int] = None
+    d_model: Optional[int] = None
+    n_layers: Optional[int] = None
+    heads: Optional[int] = None
 
 
 @dataclass
@@ -105,11 +105,11 @@ class RunConfig(BaseConfig):
     logs_dir: Path = Path()
     checkpoints_dir: Path = Path()
 
-    local_rank: int = None
+    local_rank: Optional[int] = None
     device: Union[str, torch.device] = None
     is_primary: bool = True
 
-    case: str = None        # movies, instacart
+    case: Optional[str] = None        # movies, instacart
 
     def __post_init__(self):
         # verified by the caller, double checking here
@@ -135,8 +135,9 @@ class RunConfig(BaseConfig):
         self.checkpoints_dir = self.run_dir / 'checkpoints'
         self.checkpoints_dir.mkdir(parents=False, exist_ok=True)
 
-        if self.case not in ['movies', 'instacart']:
-            raise ValueError(f'Invalid case {self.case}. Valid values are movies, instacart.')
+        if self.case not in ['movies', 'instacart', 'dickens']:
+            raise ValueError(f'Invalid case {self.case}. '
+                             'Valid values are movies, instacart, dickens.')
 
         self.is_primary = self.local_rank in (None, 0)
 
