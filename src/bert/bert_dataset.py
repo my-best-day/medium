@@ -1,4 +1,6 @@
-import torch
+"""
+A dataset for BERT MLM training.
+"""
 import random
 from torch.utils.data import Dataset
 
@@ -28,10 +30,17 @@ class BERTDataset(Dataset):
         self.corpus_lines = len(lines)
         self.lines = lines
 
+        # special tokens
         self.TOKEN_ID_MASK = self.tokenizer.vocab['[MASK]']
         self.TOKEN_ID_CLS = self.tokenizer.vocab['[CLS]']
         self.TOKEN_ID_SEP = self.tokenizer.vocab['[SEP]']
         self.TOKEN_ID_PAD = self.tokenizer.vocab['[PAD]']
+
+        # number of lines that were trimmed/padded to fit the sequence length
+        self.long_count = 0
+        self.long_chars = 0
+        self.short_count = 0
+        self.short_chars = 0
 
     def __len__(self):
         """number of lines in the corpus"""
@@ -56,10 +65,14 @@ class BERTDataset(Dataset):
 
         # trim to max length leaving space for CLS, SEP, and PAD tokens
         if len(masked) > self.seq_len - 2:
+            self.long_count += 1
+            self.long_chars += len(masked) - (self.seq_len - 2)
             masked = masked[:self.seq_len - 2]
             labels = labels[:self.seq_len - 2]
 
         elif len(masked) < self.seq_len - 2:
+            self.short_count += 1
+            self.short_chars += (self.seq_len - 2) - len(masked)
             padding = [self.TOKEN_ID_PAD for _ in range(self.seq_len - 2 - len(masked))]
             masked.extend(padding)
             labels.extend(padding)
@@ -68,10 +81,7 @@ class BERTDataset(Dataset):
         masked = [self.TOKEN_ID_CLS] + masked + [self.TOKEN_ID_SEP]
         labels = [self.TOKEN_ID_PAD] + labels + [self.TOKEN_ID_PAD]
 
-        output = {"bert_input": masked,
-                  "bert_label": labels}
-
-        return {key: torch.tensor(value) for key, value in output.items()}
+        return masked, labels
 
     def random_word(self, text):
         """
@@ -108,7 +118,7 @@ class BERTDataset(Dataset):
 
                 # 80% chance to mask
                 if prob < 0.8:
-                    output_token_id = self.mask_token_id
+                    output_token_id = self.TOKEN_ID_MASK
 
                 # 10% chance to replace with a random token
                 elif prob < 0.9:
