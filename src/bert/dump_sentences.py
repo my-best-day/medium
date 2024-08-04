@@ -7,10 +7,8 @@ class DumpStentences:
 
     def batched_debug(self, sentence, labels, mlm_out):
         with torch.no_grad():
-            # sentence = sentence.clone()
-            # labels = labels.clone()
-            # mlm_out = mlm_out.clone()
-            B, T, V = mlm_out.shape
+            B, _, _ = mlm_out.shape
+            print(f"Batch size: {B}")
             text = []
             for b in range(B):
                 if any(element != 0 for element in labels[b]):
@@ -18,6 +16,8 @@ class DumpStentences:
                     text.append(english)
                     if len(text) >= 30:
                         break
+                else:
+                    print("skipping")
             return text
 
     def debug(self, sentence, labels, mlm_out):
@@ -35,6 +35,8 @@ class DumpStentences:
                         sentence[i], range(len(sentence)))
         source = self.tokenizer.convert_ids_to_tokens(sentence2)
         source = self.convert_tokens_to_string(source)
+        english = english[:144]
+        source = source[:144]
         return f"{english}\n{source}"
 
     def convert_id_to_token(self, id):

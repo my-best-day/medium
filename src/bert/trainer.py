@@ -5,6 +5,7 @@ from pathlib import Path
 from contextlib import nullcontext
 
 from bert.timer import Timer
+from bert.dump_sentences import DumpStentences
 
 
 class Trainer:
@@ -13,6 +14,8 @@ class Trainer:
         self.model = model
         self.optimizer = optimizer
         self.tokenizer = tokenizer
+
+        self.dumper = DumpStentences(tokenizer)
 
         # 'float32', 'bfloat16', or 'float16', the latter will auto implement a GradScaler
         dtype = 'bfloat16' if torch.cuda.is_available() and torch.cuda.is_bf16_supported() else \
@@ -250,12 +253,18 @@ class Trainer:
 
         self.model.eval()
 
+        first_time = True
         for _ in range(self.val_iters):
             X, Y = self.get_batch('val')
             logits = self.model(X)
             loss = torch.nn.functional.cross_entropy(logits.transpose(1, 2), Y, ignore_index=0)
             losses.append(loss)
-            logging.debug('val loss: %f', loss)
+            logging.info('val loss: %f', loss)
+
+            if first_time:
+                first_time = False
+                debug_text = self.dumper.batched_debug(X, Y, logits)
+                print("\n".join(debug_text))
 
             probabilities = torch.softmax(logits, dim=-1)
             _, predicted = torch.max(probabilities, dim=-1)
@@ -371,7 +380,7 @@ class Trainer:
         dataset_files = sorted(dataset_files)
         dataset_file = dataset_files[epoch % len(dataset_files)]
 
-        logging.debug(f"Epoch: {epoch} - Loading dataset from {dataset_file}")
+        logging.debug(f"*** *** *** *** Epoch: {epoch} - Loading dataset from {dataset_file}")
 
         dataset = BERTDatasetPrecached(dataset_file, percentage)
         return dataset
