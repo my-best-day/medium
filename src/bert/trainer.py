@@ -380,7 +380,7 @@ class Trainer:
         dataset_files = sorted(dataset_files)
         dataset_file = dataset_files[epoch % len(dataset_files)]
 
-        logging.debug(f"*** *** *** *** Epoch: {epoch} - Loading dataset from {dataset_file}")
+        logging.info(f"*** *** *** *** Epoch: {epoch} - Loading dataset from {dataset_file}")
 
         dataset = BERTDatasetPrecached(dataset_file, percentage)
         return dataset
