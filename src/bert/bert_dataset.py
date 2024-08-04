@@ -104,7 +104,7 @@ class BERTDataset(Dataset):
 
         # mask 15% of tokens in the text
         num_to_mask = int(0.15 * len(tokens))
-        num_to_mask = min(num_to_mask, 1)
+        num_to_mask = max(num_to_mask, 1)
 
         # Shuffle indices to randomly select tokens to mask
         indices = list(range(len(tokens)))
