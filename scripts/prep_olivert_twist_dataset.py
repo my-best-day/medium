@@ -35,8 +35,8 @@ from pathlib import Path
 logger = logging.getLogger(__name__)
 
 MAX_LEN = 128
-OLIVER_TWIST_PATH = Path("./ignore/dickens/dickens/pg730_cln.txt")
-LABEL = "oliver_twist"
+INPUT_PATH = Path("./ignore/dickens/dickens/dickens.txt")
+LABEL = "dickens1"
 CASE_DIR = Path("dickens")
 
 
@@ -68,7 +68,7 @@ def _main():
     random_seed = random.randint(0, 1000)
     logger.info(f"Random seed: {random_seed}")
 
-    with open(OLIVER_TWIST_PATH, "r") as file:
+    with open(INPUT_PATH, "r") as file:
         text = file.read()
 
     # remove special characters
@@ -97,9 +97,9 @@ def _main():
 
     datasets_path = CASE_DIR / "datasets"
 
-    train_file = datasets_path / f"train_ot_{MAX_LEN}_{random_seed}.msgpack.gz"
-    val_file = datasets_path / f"val_ot_{MAX_LEN}_{random_seed}.msgpack.gz"
-    test_file = datasets_path / f"test_ot_{MAX_LEN}_{random_seed}.msgpack.gz"
+    train_file = datasets_path / f"train_dk1_{MAX_LEN}_{random_seed}.msgpack.gz"
+    val_file = datasets_path / f"val_dk1_{MAX_LEN}_{random_seed}.msgpack.gz"
+    test_file = datasets_path / f"test_dk1_{MAX_LEN}_{random_seed}.msgpack.gz"
 
     preprocess_and_cache_dataset(train_data, train_file)
     preprocess_and_cache_dataset(val_data, val_file)
