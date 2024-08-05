@@ -70,7 +70,7 @@ def get_args() -> configargparse.Namespace:  # NOSONAR: complex function, the al
     if args.lr_scheduler == 'none':
         args.lr_scheduler = None
 
-    args.weights_decay = float(args.weight_decay)
+    args.weight_decay = float(args.weight_decay)
 
     # verify percentage is between 0 and 1
     if args.dataset_percentage < 0 or args.dataset_percentage > 1:
