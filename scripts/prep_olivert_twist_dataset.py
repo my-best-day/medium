@@ -2,6 +2,9 @@
 This script prepares the Oliver Twist dataset for training, evaluation, and testing
 a BERT model with MLM.
 
+TODO: there is nothing here unique to Oliver Twist. Rename the script and get the
+        input, output pattern from the command line.
+
 Plan:
 1. open the clean file. the clean file has the top and bottom removed and only
    contains the text of the book.
@@ -35,9 +38,9 @@ from pathlib import Path
 logger = logging.getLogger(__name__)
 
 MAX_LEN = 128
-INPUT_PATH = Path("./ignore/dickens/dickens/dickens.txt")
-LABEL = "dickens1"
-CASE_DIR = Path("dickens")
+INPUT_PATH = Path("./ignore/wiki/wiki.train.tokens")
+LABEL = "wiki103"
+CASE_DIR = Path("wiki")
 
 
 def preprocess_and_cache_dataset(dataset, cache_file):
@@ -97,9 +100,9 @@ def _main():
 
     datasets_path = CASE_DIR / "datasets"
 
-    train_file = datasets_path / f"train_dk1_{MAX_LEN}_{random_seed}.msgpack.gz"
-    val_file = datasets_path / f"val_dk1_{MAX_LEN}_{random_seed}.msgpack.gz"
-    test_file = datasets_path / f"test_dk1_{MAX_LEN}_{random_seed}.msgpack.gz"
+    train_file = datasets_path / f"train_wiki_{MAX_LEN}_{random_seed}.msgpack.gz"
+    val_file = datasets_path / f"val_wiki_{MAX_LEN}_{random_seed}.msgpack.gz"
+    test_file = datasets_path / f"test_wiki_{MAX_LEN}_{random_seed}.msgpack.gz"
 
     preprocess_and_cache_dataset(train_data, train_file)
     preprocess_and_cache_dataset(val_data, val_file)
