@@ -268,6 +268,17 @@ class Trainer:
 
             probabilities = torch.softmax(logits, dim=-1)
             _, predicted = torch.max(probabilities, dim=-1)
+
+            # flatten tensors for comparison
+            y_flat = Y.view(-1)
+            predicted_flat = predicted.view(-1)
+
+            # mask: ignore padding (assumed 0) and focus on masked tokens (assumed non zero)
+            mask = (y_flat != 0)
+
+            total += mask.sum().item()
+            correct += (predicted_flat[mask] == y_flat[mask]).sum().item()
+
             total += Y.size(0) * Y.size(1)
             correct += torch.sum(Y == predicted).item()
 
