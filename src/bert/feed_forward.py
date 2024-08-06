@@ -1,5 +1,6 @@
 import torch
 
+
 class FeedForward(torch.nn.Module):
     "Implements FFN equation."
 
