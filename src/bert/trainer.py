@@ -278,9 +278,6 @@ class Trainer:
             total += mask.sum().item()
             correct += (predicted_flat[mask] == y_flat[mask]).sum().item()
 
-            total += Y.size(0) * Y.size(1)
-            correct += torch.sum(Y == predicted).item()
-
         self.model.train()
 
         val_loss = sum(losses) / len(losses)
