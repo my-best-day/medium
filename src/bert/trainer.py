@@ -259,7 +259,6 @@ class Trainer:
             logits = self.model(X)
             loss = torch.nn.functional.cross_entropy(logits.transpose(1, 2), Y, ignore_index=0)
             losses.append(loss)
-            logging.info('val loss: %f', loss)
 
             if first_time:
                 first_time = False
