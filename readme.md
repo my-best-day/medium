@@ -15,40 +15,40 @@ Here is a cherry picked example. The first block shows the predictions inside /s
 ---
 
 he fire fighters 
-<span style="background-color: lightgreen;">/./</span> 
+<span style="background-color: lightgreen;">**/./**</span> 
 after seeing how upset susan is about the school , ben confesses 
-<span style="background-color: lightgreen;">/to/</span> 
-<span style="background-color: orange;">/to/</span> the fire . 
-<span style="background-color: orange;">/she/</span> later learns that the school has 
-<span style="background-color: lightgreen;">/somehow/</span> saved . reception 
-<span style="background-color: lightgreen;">/acc/</span> 
-<span style="background-color: lightgreen;">/##ola/</span> des woodburne has earned various award nominations for her role as susan . in 200 
-<span style="background-color: orange;">/##7/</span> , she 
-<span style="background-color: lightgreen;">/was/</span> /nominated/ for best female performance in a soap from 
-<span style="background-color: lightgreen;">/the/</span> rose d 
-<span style="background-color: lightgreen;">/'/</span> or awards . at the 2007 inside soap awards , wood 
-<span style="background-color: lightgreen;">/##burn/</span>e was nominated 
-<span style="background-color: lightgreen;">/for/</span> best actress , best couple with alan fletcher and best storyline for susan 
-<span style="background-color: lightgreen;">/and/</span> karl 
-<span style="background-color: lightgreen;">/'/</span> s wedding . t
+<span style="background-color: lightgreen;">**/to/**</span> 
+<span style="background-color: orange;">~~/to/~~</span> the fire . 
+<span style="background-color: orange;">~~/she/~~</span> later learns that the school has 
+<span style="background-color: lightgreen;">**/somehow/**</span> saved . reception 
+<span style="background-color: lightgreen;">**/acc/**</span> 
+<span style="background-color: lightgreen;">**/##ola/**</span> des woodburne has earned various award nominations for her role as susan . in 200 
+<span style="background-color: orange;">~~/##7/~~</span> , she 
+<span style="background-color: lightgreen;">**/was/**</span> /nominated/ for best female performance in a soap from 
+<span style="background-color: lightgreen;">**/the/**</span> rose d 
+<span style="background-color: lightgreen;">**/'/**</span> or awards . at the 2007 inside soap awards , wood 
+<span style="background-color: lightgreen;">**/##burn/**</span>e was nominated 
+<span style="background-color: lightgreen;">**/for/**</span> best actress , best couple with alan fletcher and best storyline for susan 
+<span style="background-color: lightgreen;">**/and/**</span> karl 
+<span style="background-color: lightgreen;">**/'/**</span> s wedding . t
 
 ---
 
 he fire fighters 
-<span style="background-color: lightgreen;">.</span> after seeing how upset susan is about the school , ben confesses 
-<span style="background-color: lightgreen;">to</span> 
-<span style="background-color: orange;">starting</span> the fire . 
-<span style="background-color: orange;">susan</span> later learns that the school has <span style="background-color: lightgreen;">somehow</span> saved . reception 
-<span style="background-color: lightgreen;">acc</span>
-<span style="background-color: lightgreen;">ola</span> des woodburne has earned various award nominations for her role as susan . in 200
-<<span style="background-color: orange;">5</span> , she 
-<span style="background-color: lightgreen;">was</span> nominated for best female performance in a soap from 
-<span style="background-color: lightgreen;">the</span> rose d 
-<span style="background-color: lightgreen;">'</span> or awards . at the 2007 inside soap awards , wood
-<span style="background-color: lightgreen;">burne</span> was nominated 
-<span style="background-color: lightgreen;">for</span> best actress , best couple with alan fletcher and best storyline for susan 
-<span style="background-color: lightgreen;">and</span> karl 
-<span style="background-color: lightgreen;">'</span> s wedding . t
+<span style="background-color: lightgreen;">**.**</span> after seeing how upset susan is about the school , ben confesses 
+<span style="background-color: lightgreen;">**to**</span> 
+<span style="background-color: orange;">~~starting~~</span> the fire . 
+<span style="background-color: orange;">~~susan~~</span> later learns that the school has <span style="background-color: lightgreen;">somehow</span> saved . reception 
+<span style="background-color: lightgreen;">**acc**</span>
+<span style="background-color: lightgreen;">**ola**</span> des woodburne has earned various award nominations for her role as susan . in 200
+<<span style="background-color: orange;">~~5~~</span> , she 
+<span style="background-color: lightgreen;">**was**</span> nominated for best female performance in a soap from 
+<span style="background-color: lightgreen;">**the**</span> rose d 
+<span style="background-color: lightgreen;">**'**</span> or awards . at the 2007 inside soap awards , wood
+<span style="background-color: lightgreen;">**burne**</span> was nominated 
+<span style="background-color: lightgreen;">**for**</span> best actress , best couple with alan fletcher and best storyline for susan 
+<span style="background-color: lightgreen;">**and**</span> karl 
+<span style="background-color: lightgreen;">**'**</span> s wedding . t
 
 ---
 
