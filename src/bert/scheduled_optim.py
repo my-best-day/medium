@@ -1,3 +1,5 @@
+# WIP, not used or tested yet
+
 import numpy as np
 
 class ScheduledOptim():

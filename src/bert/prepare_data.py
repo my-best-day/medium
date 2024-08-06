@@ -1,3 +1,5 @@
+# WIP, not used or tested yet
+
 import os
 import tqdm
 from pathlib import Path
@@ -10,6 +12,8 @@ os.mkdir('./data')
 
 content = []
 file_count = 0
+
+
 def prepare_data(lines):
     for line in tqdm.tqdm(lines):
         content.append(line)
@@ -31,11 +35,11 @@ def prepare_data(lines):
         lowercase=True
     )
 
-    tokenizer.train( 
+    tokenizer.train(
         files=paths,
-        vocab_size=30_000, 
+        vocab_size=30_000,
         min_frequency=5,
-        limit_alphabet=1000, 
+        limit_alphabet=1000,
         wordpieces_prefix='##',
         special_tokens=['[PAD]', '[CLS]', '[SEP]', '[MASK]', '[UNK]']
         )

@@ -18,16 +18,19 @@ timer.print('step 4', restart=True) # sugar for print(timer.step('step 4', resta
 
 timer.restart(title) # sugar for timer.step(title, restart=True)
 
-def _time() is used internally to provide the time based on optional flag provided to Timer constructor:
+def _time() is used internally to provide the time based on optional flag provided to
+Timer constructor:
 'preformance' - time.perf_counter()
 'process' - time.process_time()
 'wall' - time.time()
 
 which one should be the default?
 
+TODO: move to utils, does not belong here
 """
 import time
 from typing import Optional, Union
+
 
 class Timer:
     def __init__(self, caption: Optional[str] = None, time: str = 'performance') -> None:
@@ -87,6 +90,7 @@ def _main():
     timer.print('step 3', restart=True)
     time.sleep(random.random() * 3)
     timer.print('last step')
+
 
 if __name__ == '__main__':
     _main()

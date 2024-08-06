@@ -1,4 +1,6 @@
+# WIP, not used or tested yet
 import torch
+
 
 class EarlyStopping:
     def __init__(self, model, path, patience, verbose, delta):
@@ -18,7 +20,8 @@ class EarlyStopping:
             self.counter += 1
             print(f'EarlyStopping counter: {self.counter} out of {self.patience}')
             if self.counter >= self.patience:
-                print(f"Early Stopping, loss doesn't improves. Current: {loss}, Best: {self.best_loss}")
+                print(f"Early Stopping, loss doesn't improves. Current: {loss}, "
+                      f"Best: {self.best_loss}")
                 self.stop_flag = True
         elif loss < self.best_loss - self.delta:
             self.best_loss = loss
@@ -33,4 +36,4 @@ class EarlyStopping:
             'loss': loss,
             'counter': self.counter
         }
-        torch.save(state,  self.path + 'checkpoints/' + 'checkpoint.pth')
+        torch.save(state, self.path + 'checkpoints/' + 'checkpoint.pth')
