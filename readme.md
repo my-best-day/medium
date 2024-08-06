@@ -2,7 +2,7 @@
 
 #### Based on and inspired by [Andrej Kapathy's nonoGPT](https://github.com/karpathy/nanoGPT)
 
-I built this project in order to learn by doing the anatomy and implementation of the transformer architecture. Right now, the focus here in on the BERT model. 
+I built this project in order to learn by doing the anatomy and implementation of the transformer architecture. Right now, the focus is on the BERT model. 
 
 #### Let's start with some results:
 
@@ -10,7 +10,7 @@ I built this project in order to learn by doing the anatomy and implementation o
 
 We achieved MLM accuracy approaching **60%** after pre-training from scratch on the WikiText-103 dataset. This is considered good results. 
 
-Here is a cherry picked example. The first block shows the predictions inside /slashes/. The second block is the original text.
+Here is a cherry-picked example. The first block shows the predictions inside /slashes/. The second block is the original text.
 
 ---
 
@@ -52,7 +52,7 @@ he fire fighters
 
 ---
 
-In this example the model guessed 13 out of the 15 masked tokens, an accuracy of 80%.
+In this carefully selected example the model guessed 13 out of the 15 masked tokens, an accuracy of 80%. 
 
 #### Hyperparameters 
 The above results were generated using the following configuration:   
@@ -76,7 +76,12 @@ lr-decay-iters = 45_000
 max-iters = 60_000
 weight-decay = 0.01
 ```
-We don't see here a few of the other parameters, for example we used 2 micro-steps.
+
+Adjust the dataset patterns towards the bottom of the config file to match your datasets.
+
+Note that a few parameters are not listed here  
+For now, you can adjust the number of micro-steps within src/bert/trainer.py, acount line 50:  
+`self.micro_step_count = 2`
 
 ## To train the model
 
@@ -86,7 +91,7 @@ Use the script at [scripts/prepare_mlm_dataset.py](./scripts/prepare_mlm_dataset
 The input file is a single text file of english words. For example, download (and extract)
 the WikiText-103 dataset.
 
-Prepare the dataset using scripts/prepare_mlm_dataset.py
+Prepare the dataset using `scripts/prepare_mlm_dataset.py`
 
 ```
 python scripts/prepare_mlm_dataset.py -h
@@ -119,37 +124,40 @@ options:
   -s SEED, --seed SEED  The random seed to be used.
 ```
 ### How to run the training
-```
 pip install -r requirements.txt
 
 mkdir wiki wiki/input wiki/vocab wiki/datasets wiki/runs
 
-download a vocab.txt, for example from https://huggingface.co/google-bert/bert-base-uncased/tree/main
+download a vocab.txt, for example from [Hugging Face](https://huggingface.co/google-bert/bert-base-uncased/tree/main)
 
-download the wikitext-103 dataset, for example from https://www.kaggle.com/datasets/dekomposition/wikitext103
-extract the zip file into wiki/input
-This dataset is quite big, if you just want to toy arround, I suggest you chop it up:
-tail -n 180k ignore/wiki/wiki.train.tokens > ignore/wiki/wiki.train.tokens.180
+download the wikitext-103 dataset, for example from [Kaggle](https://www.kaggle.com/datasets/dekomposition/wikitext103)  
+extract the zip file into `wiki/input`  
+This dataset is quite big, if you just want to toy arround, I suggest you chop it up:  
+`tail -n 180k ignore/wiki/wiki.train.tokens > ignore/wiki/wiki.train.tokens.180`
 
-cp etc/templates/config_template.ini config.ini
+`cp etc/templates/config_template.ini config.ini`
 
-if you are running on a machine wihtout gpu/cuda, also copy:
-cp etc/tempaltes/local_config_template.ini local_config.ini
+if you are running on a machine without gpu/cuda, also copy:  
+`cp etc/tempaltes/local_config_template.ini local_config.ini`
 
-if you're using local_config.ini, edit that file, otherwise edit config.ini
+if you're using `local_config.ini`, edit that file, otherwise edit `config.ini`
 
-seq-len needs to match the max len of your dataset
-batch-size needs to fit the memory of your GPU
-case = dickens for now, will be changed to mlm later
-base-dir = wiki
+`seq-len` needs to match the max len of your dataset  
+`batch-size` needs to fit the memory of your GPU  
+`case = dickens` for now, will be changed to mlm later  
+`base-dir = wiki`  
 
-start the training:
+start the training:  
+```sh
 python src/main.py
-
-if you're lucky and have multiple gpus you may use:
-python src/main.py --ddp --nproc 2
-adjust nproc to your gpu count
 ```
+
+if you're lucky and have multiple gpus you may use:  
+```sh
+python src/main.py --ddp --nproc 2
+```  
+adjust nproc to your gpu count
+
 ### Your directory structure should look something like:
 ```
 <project-base>  
@@ -169,7 +177,7 @@ wiki
         - log.txt
         - events log file
       - checkpoints
-         checkpint.pt
+         checkpoint.pt
   ```
 
 
