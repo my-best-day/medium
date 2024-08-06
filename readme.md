@@ -118,8 +118,37 @@ options:
                         The directory containing the vocabulary files.
   -s SEED, --seed SEED  The random seed to be used.
 ```
+### How to run the training
+pip install -r requirements.txt
 
-### The training process expects the following directory structure
+mkdir wiki wiki/input wiki/vocab wiki/datasets wiki/runs
+
+download a vocab.txt, for example from https://huggingface.co/google-bert/bert-base-uncased/tree/main
+
+download the wikitext-103 dataset, for example from https://www.kaggle.com/datasets/dekomposition/wikitext103
+extract the zip file into wiki/input
+
+cp etc/templates/config_template.ini config.ini
+
+if you are running on a machine wihtout gpu/cuda, also copy:
+cp etc/tempaltes/local_config_template.ini local_config.ini
+
+if you're using local_config.ini, edit that file, otherwise edit config.ini
+
+seq-len needs to match the max len of your dataset
+batch-size needs to fit the memory of your GPU
+case = dickens for now, will be changed to mlm later
+base-dir = wiki
+
+start the training:
+python src/main.py
+
+if you're lucky and have multiple gpus you may use:
+python src/main.py --ddp --nproc 2
+adjust nproc to your gpu count
+
+### Your directory structure should look something like:
+
 `<project-base>`  
 scripts...   
 src...  
@@ -138,6 +167,8 @@ wiki
         - events log file
       - checkpoints
          checkpint.pt
+ 
+
 
 
 ### Todo:
@@ -145,7 +176,3 @@ wiki
 * Fine tune the model. So far I only pre-trained it
 * Create a inference use case example
 * Consider adopting more changes from DistilBERT
-
-### movies
-The code expects to find a directory named 'movies' under the project dir.
-Underneath movies expect
