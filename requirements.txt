@@ -11,3 +11,4 @@ wandb
 # tensorboard is not compatible with numpy 2.x
 numpy==1.26.4
 scikit-learn
+numpy
