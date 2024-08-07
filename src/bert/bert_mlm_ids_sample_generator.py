@@ -1,12 +1,13 @@
 """
-A dataset for BERT MLM training.
+Generate MLM samples by masking 15% of the tokens.
+
+Assuming sample of identical, seq-len, length.
 """
 import random
-from torch.utils.data import Dataset
 import numpy as np
 
 
-class BERTDataset(Dataset):
+class BertMlmIdsSampleGenerator:
     """
     BERTDataset for preparing data for BERT model training.
 
@@ -17,7 +18,7 @@ class BERTDataset(Dataset):
         lines (list): List of text lines.
     """
 
-    def __init__(self, lines, tokenizer, seq_len, seed):
+    def __init__(self, tokenizer, seq_len, seed):
         """
         Initializes the BERTDataset.
 
@@ -29,8 +30,6 @@ class BERTDataset(Dataset):
         self.tokenizer = tokenizer
         self.seq_len = seq_len
         self.seed = seed
-        self.corpus_lines = len(lines)
-        self.lines = lines
 
         # mask 15% of tokens in the text
         self.tokens_to_mask = max(1, int(0.15 * self.seq_len))
@@ -42,17 +41,7 @@ class BERTDataset(Dataset):
         self.TOKEN_ID_SEP = self.tokenizer.vocab['[SEP]']
         self.TOKEN_ID_PAD = self.tokenizer.vocab['[PAD]']
 
-        # number of lines that were trimmed/padded to fit the sequence length
-        self.long_count = 0
-        self.long_chars = 0
-        self.short_count = 0
-        self.short_chars = 0
-
-    def __len__(self):
-        """number of lines in the corpus"""
-        return self.corpus_lines
-
-    def __getitem__(self, index):
+    def __call__(self, token_ids):
         """
         Retrieves a line, masks random words, trims/pads to sequence length,
         and adds special tokens.
@@ -63,37 +52,15 @@ class BERTDataset(Dataset):
         Returns:
             dict: Dictionary containing 'bert_input' and 'bert_label' tensors.
         """
-        line = self.lines[index]
-
         # replace random words in sentence with mask / random words
-        masked, labels = self.random_word(line)
-
-        # trim to max length leaving space for CLS, SEP, and PAD tokens
-        if len(masked) > self.seq_len - 2:
-            self.long_count += 1
-            self.long_chars += len(masked) - (self.seq_len - 2)
-            masked = masked[:self.seq_len - 2]
-            labels = labels[:self.seq_len - 2]
-
-        elif len(masked) < self.seq_len - 2:
-            self.short_count += 1
-            self.short_chars += (self.seq_len - 2) - len(masked)
-            padding = [self.TOKEN_ID_PAD for _ in range(self.seq_len - 2 - len(masked))]
-            masked.extend(padding)
-            labels.extend(padding)
+        masked, labels = self.mask_tokens(token_ids)
 
         # Add CLS, SEP, and PAD tokens to the start and end of sentences
         masked = [self.TOKEN_ID_CLS] + masked + [self.TOKEN_ID_SEP]
         labels = [self.TOKEN_ID_PAD] + labels + [self.TOKEN_ID_PAD]
-
         return masked, labels
 
-    def random_word_text(self, text):
-        # tokenize the text
-        token_ids = self.tokenizer.encode(text, add_special_tokens=False)
-        return self.random_word_token_ids(token_ids)
-
-    def random_word_token_ids(self, token_ids):
+    def mask_tokens(self, raw_sample):
         """
         Masks 15% of tokens in the text.
 
@@ -109,7 +76,7 @@ class BERTDataset(Dataset):
 
         masked_indices = self.rng.choice(self.seq_len, self.tokens_to_mask, replace=False)
 
-        for i, token_id in enumerate(token_ids):
+        for i, token_id in enumerate(raw_sample):
             if i in masked_indices:
                 # Randomly decide the type of masking
                 prob = random.random()
