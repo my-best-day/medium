@@ -83,57 +83,63 @@ Note that a few parameters are not listed here
 For now, you can adjust the number of micro-steps within src/bert/trainer.py, acount line 50:  
 `self.micro_step_count = 2`
 
-## To train the model
+## Training the Model
 
-### Dataset Preprocessing
-Use the script at [scripts/prepare_mlm_dataset.py](./scripts/prepare_mlm_dataset.py) to generate a preprocessed MLM dataset in the format that the trainer expects. In this dataset we mask about 15% of the tokens in each "sentence" (chunk of sentences).  
+### Dataset Generation
 
-The input file is a single text file of english words. For example, download (and extract)
-the WikiText-103 dataset.
+See [here](./dataset_preperation.md) a discussion of two methods of generating precached datasets. 
 
-Prepare the dataset using `scripts/prepare_mlm_dataset.py`
+#### Download Dataset 
+I used WikiText-103 which can be downloaded from [Kaggle](https://www.kaggle.com/datasets/dekomposition/wikitext103).
 
-```
-python scripts/prepare_mlm_dataset.py -h
-usage: prepare_mlm_dataset.py [-h] -i INPUT -l LABEL -o OUTPUT -m MAX_LEN -v VOCAB [-s SEED]
+This dataset is quite big, if you just toying arround, I suggest you chop it up:  
+`tail -n 180k ignore/wiki/wiki.train.tokens > ignore/wiki/wiki.train.tokens.180`
 
-Prepare MLM dataset for pre-training of a BERT model.
+#### Generation Scripts
 
-Example usage:
-python prepare_mlm_dataset.py -i wiki.train.tokens -l wiki -o wiki/datasets
-                                -m 128 -v wiki/vocab
+There are two sets of utilities to generate MLM precached datasets. 
 
-This will generate the following files:
-    wiki/datasets/train_wiki_128_123.msgpack.gz
-    wiki/datasets/val_wiki_128_123.msgpack.gz
-    wiki/datasets/test_wiki_128_123.msgpack.gz
-where wiki is the label, 128 is the max length, and 123 is the random seed.
+#### Text Segmentation
+Text segmentation is [explined here](./dataset_preperation.md#text-segmentation).
 
-options:
-  -h, --help            show this help message and exit
-  -i INPUT, --input INPUT
-                        The input text file to be processed.
-  -l LABEL, --label LABEL
-                        The label to be used for the dataset.
-  -o OUTPUT, --output OUTPUT
-                        The output directory for the dataset.
-  -m MAX_LEN, --max-len MAX_LEN
-                        The maximum length of the tokens.
-  -v VOCAB, --vocab VOCAB
-                        The directory containing the vocabulary files.
-  -s SEED, --seed SEED  The random seed to be used.
-```
-### How to run the training
+Use:  [prepare_mlm_dataset.py](./scripts/prepare_mlm_dataset.py)  
+
+`prepare_mlm_dataset.py [-h] -i INPUT -l LABEL -o OUTPUT -m MAX_LEN -v VOCAB [-s SEED]`
+
+Example:  
+`python prepare_mlm_dataset.py -i wiki.train.tokens -l wiki -o wiki/datasets
+                                -m 128 -v wiki/vocab`
+
+This will generate three files:
+* `wiki/datasets/train_wiki_128_123.msgpack.gz`
+* `wiki/datasets/val_wiki_128_123.msgpack.gz`
+* `wiki/datasets/test_wiki_128_123.msgpack.gz`
+
+128 is sequence length  
+123 is the seed of the random number generator  
+wiki is the label
+
+#### Token Splitting
+
+#### TBD
+
+See:  
+[tokenize_text.py](./scripts/tokenize_text.py), and  
+[prepare_mlm_fixed_len_dataset_from_ids.py](./scripts/prepare_mlm_fixed_len_dataset_from_ids.py.)
+
+tokenize_text.py convert the text to a list of token ids.  
+prepare_mlm_fixed_len_dataset_from_ids.py uses the output of tokenize_text to create samples by token splitting.
+
+### How to run the Training
 pip install -r requirements.txt
 
+```sh
 mkdir wiki wiki/input wiki/vocab wiki/datasets wiki/runs
+```
 
-download a vocab.txt, for example from [Hugging Face](https://huggingface.co/google-bert/bert-base-uncased/tree/main)
+#### Download a vocab.txt
+For example from [Hugging Face](https://huggingface.co/google-bert/bert-base-uncased/tree/main). I used both this vocab and another one, smaller. Training runs faster, consuming less memory, with a smaller vocab, and in my case, the smaller vocab yielded better results. 
 
-download the wikitext-103 dataset, for example from [Kaggle](https://www.kaggle.com/datasets/dekomposition/wikitext103)  
-extract the zip file into `wiki/input`  
-This dataset is quite big, if you just want to toy arround, I suggest you chop it up:  
-`tail -n 180k ignore/wiki/wiki.train.tokens > ignore/wiki/wiki.train.tokens.180`
 
 `cp etc/templates/config_template.ini config.ini`
 
