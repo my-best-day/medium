@@ -125,7 +125,7 @@ wiki is the label
 
 See:  
 [tokenize_text.py](./scripts/tokenize_text.py), and  
-[prepare_mlm_fixed_len_dataset_from_ids.py](./scripts/prepare_mlm_fixed_len_dataset_from_ids.py.)
+[prepare_mlm_fixed_len_dataset_from_ids.py](./scripts/prepare_mlm_fixed_len_dataset_from_ids.py).
 
 tokenize_text.py convert the text to a list of token ids.  
 prepare_mlm_fixed_len_dataset_from_ids.py uses the output of tokenize_text to create samples by token splitting.
