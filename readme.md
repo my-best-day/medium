@@ -6,9 +6,9 @@ I built this project in order to learn by doing the anatomy and implementation o
 
 #### Let's start with some results:
 
-![Validation accuracy approaches 60%!](./etc/assets/val_accuracy_20240805.png)
+![Validation accuracy approaches 60%!](./etc/assets/MLM_val_accuracy.png)
 
-We achieved MLM accuracy approaching **60%** after pre-training from scratch on the WikiText-103 dataset. This is considered good results. 
+We achieved MLM accuracy **suppressing 60%** after pre-training from scratch on the WikiText-103 dataset. This is considered a good results. 
 
 Here is a cherry-picked example. The first block shows the predictions inside /slashes/. The second block is the original text.
 
@@ -52,7 +52,7 @@ he fire fighters
 
 ---
 
-In this carefully selected example the model guessed 13 out of the 15 masked tokens, an accuracy of 80%. 
+In this carefully selected example the model guessed 13 out of the 15 masked tokens, an accuracy of 87%. 
 
 #### Hyperparameters 
 The above results were generated using the following configuration:   
