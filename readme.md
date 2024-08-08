@@ -8,7 +8,7 @@ I built this project in order to learn by doing the anatomy and implementation o
 
 ![Validation accuracy approaches 60%!](./etc/assets/MLM_val_accuracy.png)
 
-We achieved MLM accuracy **suppressing 60%** after pre-training from scratch on the WikiText-103 dataset. This is considered a good results. 
+We achieved MLM accuracy **exceeding 60%** after pre-training from scratch on the WikiText-103 dataset. This is considered a good result. 
 
 Here is a cherry-picked example. The first block shows the predictions inside /slashes/. The second block is the original text.
 
