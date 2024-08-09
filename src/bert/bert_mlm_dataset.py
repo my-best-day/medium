@@ -6,9 +6,9 @@ from torch.utils.data import Dataset
 import numpy as np
 
 
-class BERTDataset(Dataset):
+class BertMlmDataset(Dataset):
     """
-    BERTDataset for preparing data for BERT model training.
+    BertMlmDataset for preparing data for BERT model training.
 
     Attributes:
         tokenizer (Tokenizer): Tokenizer to convert text to tokens.
@@ -19,7 +19,7 @@ class BERTDataset(Dataset):
 
     def __init__(self, lines, tokenizer, seq_len, seed):
         """
-        Initializes the BERTDataset.
+        Initializes the BertMlmDataset.
 
         Args:
             lines (list): List of text lines.

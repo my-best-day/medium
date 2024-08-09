@@ -7,9 +7,9 @@ import msgpack
 from torch.utils.data import Dataset
 
 
-class BERTDatasetPrecached(Dataset):
+class BertMlmDatasetPrecached(Dataset):
     """
-    Dataset for pre-cached BERT inputs and labels.
+    Dataset for pre-cached BERT MLM inputs and labels.
 
     Masking is already done in the cached data.
     """

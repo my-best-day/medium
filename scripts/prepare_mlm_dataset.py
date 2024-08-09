@@ -17,7 +17,7 @@ and by how much.
 3. feed the chunks into the BERT dataset to create a preprocessed dataset.
    and dump it to a file that we will use during training.
 """
-from bert.bert_dataset import BERTDataset
+from bert.bert_mlm_dataset import BertMlmDataset
 from bert.timer import Timer
 
 import re
@@ -59,9 +59,9 @@ def prepare_mlm_dataset(args):
 
     tokenizer = BertTokenizer.from_pretrained(args.vocab, local_files_only=True)
 
-    train_data = BERTDataset(train_chunks, seq_len=args.max_len, tokenizer=tokenizer)
-    val_data = BERTDataset(val_chunks, seq_len=args.max_len, tokenizer=tokenizer)
-    test_data = BERTDataset(test_chunks, seq_len=args.max_len, tokenizer=tokenizer)
+    train_data = BertMlmDataset(train_chunks, seq_len=args.max_len, tokenizer=tokenizer)
+    val_data = BertMlmDataset(val_chunks, seq_len=args.max_len, tokenizer=tokenizer)
+    test_data = BertMlmDataset(test_chunks, seq_len=args.max_len, tokenizer=tokenizer)
 
     train_file = args.output / f"train_dk1_{args.max_len}_{args.seed}.msgpack.gz"
     val_file = args.output / f"val_dk1_{args.max_len}_{args.seed}.msgpack.gz"

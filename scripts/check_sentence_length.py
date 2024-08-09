@@ -1,6 +1,6 @@
 import glob
 import torch
-from bert.bert_dataset import BERTDatasetPrecached
+from bert.bert_mlm_dataset_precached import BertMlmDatasetPrecached
 from bert.dump_sentences import describe
 from bert.timer import Timer
 
@@ -16,7 +16,7 @@ def _main():
     dataset_file = dataset_files[0]
     print(f"Loading dataset from {dataset_file}")
 
-    dataset = BERTDatasetPrecached(dataset_file)
+    dataset = BertMlmDatasetPrecached(dataset_file)
 
     lengths = []
 

@@ -5,7 +5,7 @@ from sklearn.model_selection import train_test_split
 
 from transformers import BertTokenizer
 
-from bert.bert_dataset import BERTDataset
+from bert.bert_mlm_dataset import BertMlmDataset
 from bert.timer import Timer
 
 
@@ -65,11 +65,11 @@ def _main():
     tokenizer = BertTokenizer.from_pretrained(
         './bert-it-1/bert-it-vocab.txt', local_files_only=True)
 
-    train_data = BERTDataset(
+    train_data = BertMlmDataset(
         train_lines, seq_len=MAX_LEN, tokenizer=tokenizer)
-    val_data = BERTDataset(
+    val_data = BertMlmDataset(
         val_lines, seq_len=MAX_LEN, tokenizer=tokenizer)
-    test_data = BERTDataset(
+    test_data = BertMlmDataset(
         test_lines, seq_len=MAX_LEN, tokenizer=tokenizer)
 
     preprocess_and_cache_dataset(train_data, f'./datasets32/train_data_{random_seed}.msgpack.gz')

@@ -368,7 +368,7 @@ class Trainer:
 
     def get_dataset(self, epoch, split):
         import glob
-        from bert.bert_dataset_precached import BERTDatasetPrecached
+        from bert.bert_mlm_dataset_precached import BertMlmDatasetPrecached
 
         if split == 'train':
             pattern = self.config.train.dataset_pattern
@@ -389,5 +389,5 @@ class Trainer:
 
         logging.info(f"*** *** *** *** Epoch: {epoch} - Loading dataset from {dataset_file}")
 
-        dataset = BERTDatasetPrecached(dataset_file, percentage)
+        dataset = BertMlmDatasetPrecached(dataset_file, percentage)
         return dataset

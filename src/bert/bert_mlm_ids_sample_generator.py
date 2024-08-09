@@ -9,18 +9,24 @@ import numpy as np
 
 class BertMlmIdsSampleGenerator:
     """
-    BERTDataset for preparing data for BERT model training.
+    BertMlmIdsSampleGenerator for generating MLM samples by masking tokens.
 
     Attributes:
         tokenizer (Tokenizer): Tokenizer to convert text to tokens.
         seq_len (int): Maximum sequence length.
-        corpus_lines (int): Number of lines in the corpus.
-        lines (list): List of text lines.
+        seed (int): Seed for random number generation.
+        tokens_to_mask (int): Number of tokens to mask in the text.
+        rng (Generator): Random number generator.
+
+        TOKEN_ID_MASK (int): Token ID for the '[MASK]' token.
+        TOKEN_ID_CLS (int): Token ID for the '[CLS]' token.
+        TOKEN_ID_SEP (int): Token ID for the '[SEP]' token.
+        TOKEN_ID_PAD (int): Token ID for the '[PAD]' token.
     """
 
     def __init__(self, tokenizer, seq_len, seed):
         """
-        Initializes the BERTDataset.
+        Initializes the BertMlmIdsSampleGenerator.
 
         Args:
             lines (list): List of text lines.
