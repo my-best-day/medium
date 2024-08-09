@@ -367,9 +367,9 @@ class Trainer:
         return loader
 
     def get_dataset(self, epoch, split):
-        if self.config.run.dataset == 'mlm':
+        if self.config.model.task_type == 'mlm':
             dataset = self.get_mlm_dataset(epoch, split)
-        elif self.config.run.dataset == 'cola':
+        elif self.config.model.task_type == 'cola':
             dataset = self.get_cola_dataset(split)
         else:
             raise ValueError(f"Unknown dataset: {self.config.run.dataset}")
