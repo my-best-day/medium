@@ -56,7 +56,7 @@ class MultiHeadedAttention(torch.nn.Module):
             # need to set dropout manually when using flash attention
             dropout = self.dropout_value if self.training else 0
             context = torch.nn.functional.scaled_dot_product_attention(
-                query, key, value, attn_mask=None, dropout_p=dropout, is_causal=self.causal)
+                query, key, value, attn_mask=mask, dropout_p=dropout, is_causal=self.causal)
         else:
             # (batch_size, h, max_len, d_k) matmul (batch_size, h, d_k, max_len) -->
             #      (batch_size, h, max_len, max_len)
