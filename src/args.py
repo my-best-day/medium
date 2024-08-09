@@ -89,6 +89,8 @@ def get_args() -> configargparse.Namespace:  # NOSONAR: complex function, the al
 
 
 def add_model_arguments(parser: configargparse.ArgumentParser):
+    parser.add_argument('-t', '--task-type', type=str, default=None,
+                        choices=['mlm', 'cola'], help='Task type')
     parser.add_argument('--seq-len', type=int, default=None, help='Sequence length')
     parser.add_argument('--d-model', type=int, default=None, help='Model dimension')
     parser.add_argument('--n-layers', type=int, default=None, help='Number of layers')

@@ -367,6 +367,15 @@ class Trainer:
         return loader
 
     def get_dataset(self, epoch, split):
+        if self.config.run.dataset == 'mlm':
+            dataset = self.get_mlm_dataset(epoch, split)
+        elif self.config.run.dataset == 'cola':
+            dataset = self.get_cola_dataset(split)
+        else:
+            raise ValueError(f"Unknown dataset: {self.config.run.dataset}")
+        return dataset
+
+    def get_mlm_dataset(self, epoch, split):
         import glob
         from bert.bert_mlm_dataset_precached import BertMlmDatasetPrecached
 
@@ -390,4 +399,15 @@ class Trainer:
         logging.info(f"*** *** *** *** Epoch: {epoch} - Loading dataset from {dataset_file}")
 
         dataset = BertMlmDatasetPrecached(dataset_file, percentage)
+        return dataset
+
+    def get_cola_dataset(self, split):
+        assert split in ('train', 'val')
+        from bert.cola.cola_dataset import ColaDataset
+        if split == 'train':
+            filename = 'in_domain_train.tsv'
+        elif split == 'val':
+            filename = 'in_domain_dev.tsv'
+        path = self.config.run.datasets_dir / filename
+        dataset = ColaDataset(path, self.tokenizer, self.config.model.seq_len)
         return dataset

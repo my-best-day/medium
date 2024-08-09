@@ -25,6 +25,7 @@ class BaseConfig:
 
 @dataclass
 class ModelConfig(BaseConfig):
+    task_type: Optional[str] = None  # mlm, cola
     seq_len: Optional[int] = None
     d_model: Optional[int] = None
     n_layers: Optional[int] = None

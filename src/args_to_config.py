@@ -3,6 +3,7 @@ from utils.config import RunConfig, TrainConfig, ModelConfig, Config
 
 def get_config(args):
     model_config = ModelConfig(
+        task_type=args.task_type,
         seq_len=args.seq_len,
         d_model=args.d_model,
         n_layers=args.n_layers,

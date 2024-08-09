@@ -150,16 +150,21 @@ def resume_from_checkpoint(config, model, optimizer, trainer):
         for param in model.module.parameters():
             torch.distributed.broadcast(param.data, src=0)
 
-    # load optimizer state
-    optimizer_state = checkpoint['optimizer']
-    optimizer.load_state_dict(optimizer_state)
+    if config.model.task_type == 'mlm':
+        # load optimizer state
+        optimizer_state = checkpoint['optimizer']
+        optimizer.load_state_dict(optimizer_state)
 
-    # load trainer state
-    iteration = checkpoint['iter']
+        # load trainer state
+        iteration = checkpoint['iter']
+        val_loss = checkpoint['val_loss']
+    else:
+        iteration = 0
+        val_loss = 0
+
     trainer.start_iter = iteration
     trainer.iter = trainer.start_iter
 
-    val_loss = checkpoint['val_loss']
     trainer.best_val_loss = val_loss
 
     logging.info("Resuming from iteration %s, with val loss %s", iteration, val_loss)

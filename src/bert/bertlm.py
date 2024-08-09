@@ -5,15 +5,16 @@ from bert.masked_language_model import MaskedLanguageModel
 
 class BERTLM(torch.nn.Module):
     """
-    BERT Language Model
+    BERT MLM Language Model
     """
 
     def __init__(self, bert: BERT, vocab_size, apply_softmax):
         """
-        :param bert: BERT model which should be trained
-        :param vocab_size: total vocab size for masked_lm
-        """
+        BERT MLM Language Model
 
+        :param bert: BERT model
+        :param vocab_size: total vocab size
+        """
         super().__init__()
         self.bert = bert
         self.mask_lm = MaskedLanguageModel(self.bert.d_model, vocab_size, apply_softmax)
