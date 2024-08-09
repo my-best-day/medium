@@ -1,6 +1,6 @@
 # BERT Model and Training
 
-#### Based on and inspired by [Andrej Kapathy's nonoGPT](https://github.com/karpathy/nanoGPT)
+#### Based on and inspired by [Andrej Karpathy's nonoGPT](https://github.com/karpathy/nanoGPT)
 
 I built this project in order to learn by doing the anatomy and implementation of the transformer architecture. Right now, the focus is on the BERT model. 
 
