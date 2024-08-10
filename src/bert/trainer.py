@@ -261,7 +261,12 @@ class Trainer:
         for _ in range(self.val_iters):
             X, Y = self.get_batch('val')
             logits = self.model(X)
-            loss = torch.nn.functional.cross_entropy(logits.transpose(1, 2), Y, ignore_index=0)
+            logits = self.model(X)
+            if self.config.model.task_type == 'mlm':
+                loss_logits = logits.transpose(1, 2)
+            else:
+                loss_logits = logits
+            loss = torch.nn.functional.cross_entropy(loss_logits, Y, ignore_index=0)
             losses.append(loss)
 
             if first_time:
