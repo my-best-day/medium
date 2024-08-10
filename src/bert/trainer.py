@@ -125,7 +125,11 @@ class Trainer:
 
         with self.autocast_ctx, sync_ctx:
             logits = self.model(X)
-            loss = torch.nn.functional.cross_entropy(logits.transpose(1, 2), Y, ignore_index=0)
+            if self.config.model.task_type == 'mlm':
+                loss_logits = logits.transpose(1, 2)
+            else:
+                loss_logits = logits
+            loss = torch.nn.functional.cross_entropy(loss_logits, Y, ignore_index=0)
 
         return logits, loss
 
