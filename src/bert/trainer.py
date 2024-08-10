@@ -261,7 +261,6 @@ class Trainer:
         for _ in range(self.val_iters):
             X, Y = self.get_batch('val')
             logits = self.model(X)
-            logits = self.model(X)
             if self.config.model.task_type == 'mlm':
                 loss_logits = logits.transpose(1, 2)
             else:
