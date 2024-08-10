@@ -261,11 +261,16 @@ class Trainer:
         for _ in range(self.val_iters):
             X, Y = self.get_batch('val')
             logits = self.model(X)
+
             if self.config.model.task_type == 'mlm':
-                loss_logits = logits.transpose(1, 2)
+                # For MLM tasks
+                loss_logits = logits.transpose(1, 2)  # Shape: [batch_size, vocab_size, seq_len]
+                loss = torch.nn.functional.cross_entropy(loss_logits, Y, ignore_index=0)
             else:
-                loss_logits = logits
-            loss = torch.nn.functional.cross_entropy(loss_logits, Y, ignore_index=0)
+                # For classification tasks like CoLA
+                loss_logits = logits  # Shape: [batch_size, num_classes]
+                loss = torch.nn.functional.cross_entropy(loss_logits, Y)  # Y should be [batch_size]
+
             losses.append(loss)
 
             if first_time:
