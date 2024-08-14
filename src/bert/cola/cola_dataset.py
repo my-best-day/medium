@@ -4,6 +4,7 @@ A dataset for CoLA dataset.
 CoLA: The Corpus of Linguistic Acceptability consists of sentences labeled as
 grammatically correct or incorrect.
 """
+import torch
 from torch.utils.data import Dataset
 import pandas as pd
 from pathlib import Path

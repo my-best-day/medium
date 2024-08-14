@@ -1,4 +1,5 @@
 import time
+from venv import logger
 import torch
 import logging
 from pathlib import Path
@@ -7,6 +8,7 @@ from contextlib import nullcontext
 from bert.timer import Timer
 from bert.dump_sentences import DumpStentences
 
+logger = logging.getLogger(__name__)
 
 class Trainer:
     def __init__(self, config, model, optimizer, tokenizer):
@@ -71,7 +73,7 @@ class Trainer:
                 accumulated_loss += loss
                 self.backward(loss)
             # outside micro-step
-            logging.debug(f"loss: {accumulated_loss}")
+            logger.debug(f"loss: {accumulated_loss}")
             losses.append(accumulated_loss)
             self.step()
             self.optimizer.zero_grad()
@@ -79,7 +81,7 @@ class Trainer:
 
     def should_continue_training(self):
         if Path('./stop').exists() or Path('./stop_now').exists():
-            logging.info("Stopping training because file './stop' or './stop_now' exists.")
+            logger.info("Stopping training because file './stop' or './stop_now' exists.")
             result = False
         else:
             result = self.iter < self.config.train.max_iters
@@ -127,9 +129,13 @@ class Trainer:
             logits = self.model(X)
             if self.config.model.task_type == 'mlm':
                 loss_logits = logits.transpose(1, 2)
+                loss = torch.nn.functional.cross_entropy(loss_logits, Y, ignore_index=0)
             else:
                 loss_logits = logits
-            loss = torch.nn.functional.cross_entropy(loss_logits, Y, ignore_index=0)
+            loss = torch.nn.functional.cross_entropy(loss_logits, Y)
+            # logger.info("v logits shape: %s, Y shape: %s", loss_logits.shape, Y.shape)
+            # logger.info("v logits: %s", loss_logits)
+            # logger.info("v Y: %s", Y)
 
         return logits, loss
 
@@ -203,7 +209,7 @@ class Trainer:
             f'v.accu: {val_accuracy:.1%}',
         ]
         msg = ' | '.join(items)
-        logging.info(msg)
+        logger.info(msg)
 
     def log_tensorboard(self, train_loss, val_loss, val_accuracy, lr):
         if train_loss is not None:
@@ -269,7 +275,10 @@ class Trainer:
             else:
                 # For classification tasks like CoLA
                 loss_logits = logits  # Shape: [batch_size, num_classes]
+                # logger.info("t logits shape: %s, Y shape: %s", loss_logits.shape, Y.shape)
                 loss = torch.nn.functional.cross_entropy(loss_logits, Y)  # Y should be [batch_size]
+            # logger.info("t logits: %s", logits)
+            # logger.info("t Y: %s", Y)
 
             losses.append(loss)
 
@@ -285,11 +294,14 @@ class Trainer:
             y_flat = Y.view(-1)
             predicted_flat = predicted.view(-1)
 
-            # mask: ignore padding (assumed 0) and focus on masked tokens (assumed non zero)
-            mask = (y_flat != 0)
-
-            total += mask.sum().item()
-            correct += (predicted_flat[mask] == y_flat[mask]).sum().item()
+            if self.config.model.task_type == 'mlm':
+                # mask: ignore padding (assumed 0) and focus on masked tokens (assumed non zero)
+                mask = (y_flat != 0)
+                total += mask.sum().item()
+                correct += (predicted_flat[mask] == y_flat[mask]).sum().item()
+            else:
+                total += Y.size(0)
+                correct += (predicted == Y).sum().item()
 
         self.model.train()
 
@@ -409,7 +421,7 @@ class Trainer:
         dataset_files = sorted(dataset_files)
         dataset_file = dataset_files[epoch % len(dataset_files)]
 
-        logging.info(f"*** *** *** *** Epoch: {epoch} - Loading dataset from {dataset_file}")
+        logger.info(f"*** *** *** *** Epoch: {epoch} - Loading dataset from {dataset_file}")
 
         dataset = BertMlmDatasetPrecached(dataset_file, percentage)
         return dataset
