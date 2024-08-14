@@ -103,7 +103,7 @@ def get_bert_model(config, tokenizer):
         seq_len=model_config.seq_len
     )
 
-    if config.model.task_type == 'cola':
+    if config.model.task_type in ('cola', 'sst2'):
         bert_lm = BertClassifierModel(bert_model, 2)
     elif config.model.task_type == 'mlm':
         bert_lm = BERTLM(bert_model, vocab_size, apply_softmax=False)

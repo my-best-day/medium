@@ -391,6 +391,8 @@ class Trainer:
             dataset = self.get_mlm_dataset(epoch, split)
         elif self.config.model.task_type == 'cola':
             dataset = self.get_cola_dataset(split)
+        elif self.config.model.task_type == 'sst2':
+            dataset = self.get_sst2_dataset(split)
         else:
             raise ValueError(f"Unknown dataset: {self.config.run.dataset}")
         return dataset
@@ -430,4 +432,16 @@ class Trainer:
             filename = 'in_domain_dev.tsv'
         path = self.config.run.datasets_dir / filename
         dataset = ColaDataset(path, self.tokenizer, self.config.model.seq_len)
+        return dataset
+
+    def get_sst2_dataset(self, split):
+        assert split in ('train', 'val')
+        from data.sst2_dataset import Sst2Dataset
+        if split == 'train':
+            prefix = 'train'
+        elif split == 'val':
+            prefix = 'validation'
+        filename = f'{prefix}-00000-of-00001.parquet'
+        path = self.config.run.datasets_dir / filename
+        dataset = Sst2Dataset(path, self.tokenizer, self.config.model.seq_len)
         return dataset
