@@ -1,16 +1,16 @@
 """
-Predicting if a sentence is gramatrically correct
+Classifier model
 """
 import torch
 
 
-class ColaLanguageModel(torch.nn.Module):
+class ClassifierModel(torch.nn.Module):
     """
-    Predicting if a sentence is gramatrically correct
+    Classifier model
     """
 
     def __init__(self, hidden: int, num_labels: int):
-        super(ColaLanguageModel, self).__init__()
+        super(ClassifierModel, self).__init__()
         self.hidden = hidden
         self.classifier = torch.nn.Linear(hidden, num_labels)
 

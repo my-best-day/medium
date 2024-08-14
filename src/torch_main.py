@@ -83,7 +83,7 @@ def get_model(config, tokenizer):
 def get_bert_model(config, tokenizer):
     from bert.bert import BERT
     from bert.bertlm import BERTLM
-    from bert.cola.bert_cola_lm import BertColaLanguageModel
+    from bert.cola.bert_cola_lm import BertClassifierModel
 
     model_config = config.model
     vocab_size = len(tokenizer.vocab)
@@ -101,7 +101,7 @@ def get_bert_model(config, tokenizer):
     )
 
     if config.model.task_type == 'cola':
-        bert_lm = BertColaLanguageModel(bert_model)
+        bert_lm = BertClassifierModel(bert_model)
     elif config.model.task_type == 'mlm':
         bert_lm = BERTLM(bert_model, vocab_size, apply_softmax=False)
     else:
