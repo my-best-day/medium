@@ -155,7 +155,7 @@ def resume_from_checkpoint(config, model, optimizer, trainer):
 
     is_wrapped = is_model_wrapped(config)
     # in DDP, load state dict into the underlying model, otherwise, load it directly
-    (model.module if is_wrapped else model).load_state_dict(model_state)
+    (model.module if is_wrapped else model).load_state_dict(model_state, strict=False)
 
     if config.run.parallel_mode == 'ddp':
         for param in model.module.parameters():
