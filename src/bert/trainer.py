@@ -257,7 +257,7 @@ class Trainer:
 
         self.model.eval()
 
-        first_time = True
+        dump_sentences = self.config.model.task_type == 'mlm'
         for _ in range(self.val_iters):
             X, Y = self.get_batch('val')
             logits = self.model(X)
@@ -273,8 +273,8 @@ class Trainer:
 
             losses.append(loss)
 
-            if first_time:
-                first_time = False
+            if dump_sentences:
+                dump_sentences = False
                 debug_text = self.dumper.batched_debug(X, Y, logits)
                 print("\n".join(debug_text))
 
