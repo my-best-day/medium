@@ -5,7 +5,7 @@ from pathlib import Path
 from contextlib import nullcontext
 
 from utils.timer import Timer
-from bert.ml.mlm.dump_sentences import DumpStentences
+from bert.lm.mlm.dump_sentences import DumpStentences
 
 
 logger = logging.getLogger(__name__)
