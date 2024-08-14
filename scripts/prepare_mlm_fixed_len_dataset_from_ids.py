@@ -17,7 +17,7 @@ from sklearn.model_selection import train_test_split
 from pathlib import Path
 import argparse
 from transformers import BertTokenizer
-from bert.bert_mlm_ids_sample_generator import BertMlmIdsSampleGenerator
+from data.mlm.bert_mlm_ids_sample_generator import BertMlmIdsSampleGenerator
 import itertools
 
 logger = logging.getLogger(__name__)
