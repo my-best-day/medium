@@ -37,8 +37,7 @@ class ColaDataset(Dataset):
 
     def __getitem__(self, index):
         """
-        Retrieves a line, masks random words, trims/pads to sequence length,
-        and adds special tokens.
+        Returns the tokenized text and label for the given index.
         """
         row = self.df.iloc[index]
         text = row['text']
