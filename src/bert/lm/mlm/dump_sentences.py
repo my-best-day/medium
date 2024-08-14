@@ -38,7 +38,7 @@ class DumpStentences:
                 if any(element != 0 for element in labels[b]):
                     english = self.debug(sentence[b], labels[b], mlm_out[b])
                     text.append(english)
-                    if len(text) >= 30:
+                    if len(text) >= 8:
                         break
                 else:
                     print("skipping")
@@ -73,8 +73,8 @@ class DumpStentences:
                         sentence[i], range(len(sentence)))
         source = self.tokenizer.convert_ids_to_tokens(sentence2)
         source = self.convert_tokens_to_string(source)
-        english = english[:144]
-        source = source[:144]
+        # english = english[:144]
+        # source = source[:144]
         return f"{english}\n{source}"
 
     def convert_id_to_token(self, id):
