@@ -369,12 +369,13 @@ class Trainer:
         batch_size = self.config.train.batch_size
 
         if self.config.run.parallel_mode == 'ddp':
-            sampler = DistributedSampler(dataset)
+            sampler = DistributedSampler(dataset, shuffle=True)
             sampler.set_epoch(epoch)
             loader = DataLoader(dataset, sampler=sampler, batch_size=batch_size,
                                 pin_memory=self.config.run.async_to_device)
         else:
             loader = DataLoader(dataset, batch_size=batch_size,
+                                shuffle=True,
                                 pin_memory=self.config.run.async_to_device)
 
         return loader
