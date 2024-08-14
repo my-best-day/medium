@@ -12,7 +12,7 @@ class EncoderLayer(torch.nn.Module):
         self.layernorm1 = torch.nn.LayerNorm(d_model)
         self.self_multihead = MultiHeadedAttention(heads, d_model, max_len=max_len)
         self.layernorm2 = torch.nn.LayerNorm(d_model)
-        self.feed_forward = FeedForward(d_model, middle_dim=feed_forward_hidden)
+        self.feed_forward = FeedForward(d_model, middle_dim=feed_forward_hidden, dropout=dropout)
         self.dropout = torch.nn.Dropout(dropout)
 
     def forward(self, embeddings, mask):
