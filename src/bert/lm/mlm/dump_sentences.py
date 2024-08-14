@@ -1,11 +1,35 @@
 import torch
+"""
+This module contains a class that converts tokenized predictions and labels to human readable
+format.
+"""
 
 
 class DumpStentences:
+    """
+    Takes a tokonized prediction and the corresponding labels and converts them to a human readable
+    format.
+
+    :param tokenizer: The tokenizer used to convert the token ids to strings.
+    """
     def __init__(self, tokenizer):
+        """
+        Takes a tokonized prediction and the corresponding labels and converts them to a human
+        readable format.
+        """
         self.tokenizer = tokenizer
 
     def batched_debug(self, sentence, labels, mlm_out):
+        """
+        Converts a batch of tokenized predictions and the corresponding labels to human readable
+        format.
+
+        :param sentence: The tokenized input sentence.
+        :param labels: The tokenized labels.
+        :param mlm_out: The tokenized prediction.
+        :return: A list of pair of human readable sentences - the prediction and the original
+        sentence.
+        """
         with torch.no_grad():
             B, _, _ = mlm_out.shape
             print(f"Batch size: {B}")
@@ -21,6 +45,20 @@ class DumpStentences:
             return text
 
     def debug(self, sentence, labels, mlm_out):
+        """
+        Converts a tokenized prediction and the corresponding labels to human readable format.
+
+        For example, returns:
+
+        "The fox /jumped/ over the /red/ dog /./"
+        "\n"
+        "The fox jumped over the lazy dog."
+
+        :param sentence: The tokenized input sentence.
+        :param labels: The tokenized labels.
+        :param mlm_out: The tokenized prediction.
+        :return: A pair of human readable sentences - the prediction and the original sentence
+        """
         english = []
         for i, id in enumerate(labels):
             if id != 0:
@@ -46,6 +84,7 @@ class DumpStentences:
     def convert_tokens_to_string(self, tokens):
         import re
         text = self.tokenizer.convert_tokens_to_string(tokens)
+        # remove the [CLS] and [SEP] tokens
         cleaned_text = re.sub(r'\[.*?\]\s*', '', text)
         return cleaned_text
 

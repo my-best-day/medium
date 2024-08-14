@@ -25,8 +25,6 @@ Timer constructor:
 'wall' - time.time()
 
 which one should be the default?
-
-TODO: move to utils, does not belong here
 """
 import time
 from typing import Optional, Union

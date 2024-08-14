@@ -1,6 +1,6 @@
 import torch
 from bert.bert import BERT
-from bert.cola.classifier_language_model import ClassifierModel
+from .classifier_language_model import ClassifierModel
 
 
 class BertClassifierModel(torch.nn.Module):

@@ -18,7 +18,7 @@ and by how much.
    and dump it to a file that we will use during training.
 """
 from bert.bert_mlm_dataset import BertMlmDataset
-from bert.timer import Timer
+from utils.timer import Timer
 
 import re
 import logging

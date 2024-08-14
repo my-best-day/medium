@@ -3,6 +3,9 @@ import torch
 
 
 class PositionalEmbedding(torch.nn.Module):
+    """
+    Positional Embedding class.
+    """
 
     def __init__(self, d_model, max_len):
         super().__init__()

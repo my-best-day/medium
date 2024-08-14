@@ -6,9 +6,9 @@ import logging
 import multiprocessing
 import torch
 
-from args import get_args
+from utils.args import get_args
 from utils.logging import config_logging
-from args_to_config import get_config
+from utils.args_to_config import get_config
 
 from torch_main import create_objects_and_trainer
 

@@ -1,5 +1,6 @@
 """
-TBD
+Routines to create objects and trainer, and configure the
+training procedure.
 """
 import logging
 import torch
@@ -53,9 +54,11 @@ def get_tokenizer(config):
         path = str(path)
         result = BertTokenizer.from_pretrained(path, local_files_only=True)
     elif config.run.case == 'instacart':
-        from instacart.instacart_tokenizer import InstacartTokenizer
-        path = config.run.base_dir / 'vocab' / 'instacart_vocab.txt'
-        result = InstacartTokenizer(path)
+        raise NotImplementedError('InstacartTokenizer not implemented')
+        # NOSONAR
+        # from instacart.instacart_tokenizer import InstacartTokenizer
+        # path = config.run.base_dir / 'vocab' / 'instacart_vocab.txt'
+        # result = InstacartTokenizer(path)
     else:
         raise ValueError('Unknown case. %s', config.run.case)
     return result
@@ -83,7 +86,7 @@ def get_model(config, tokenizer):
 def get_bert_model(config, tokenizer):
     from bert.bert import BERT
     from bert.bertlm import BERTLM
-    from bert.cola.bert_cola_lm import BertClassifierModel
+    from bert.lm.classifier.bert_classifier_model import BertClassifierModel
 
     model_config = config.model
     vocab_size = len(tokenizer.vocab)

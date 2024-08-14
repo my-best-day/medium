@@ -2,9 +2,18 @@ import torch
 
 
 class FeedForward(torch.nn.Module):
-    "Implements FFN equation."
+    """
+    Implements a feed-forward neural network, AKA a multi-layer perceptron <3.
+    """
 
-    def __init__(self, d_model, middle_dim=2048, dropout=0.1):
+    def __init__(self, d_model, middle_dim, dropout):
+        """
+        Initializes the feed-forward neural network.
+
+        :param d_model: the number of expected features in the input (required).
+        :param middle_dim: the size of the intermediate layer (required).
+        :param dropout: the dropout value (required).
+        """
         super(FeedForward, self).__init__()
 
         self.fc1 = torch.nn.Linear(d_model, middle_dim)

@@ -17,7 +17,7 @@ import gzip
 import argparse
 import joblib
 from transformers import BertTokenizer
-from bert.timer import Timer
+from utils.timer import Timer
 import msgpack
 import itertools
 import logging

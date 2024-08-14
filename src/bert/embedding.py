@@ -1,6 +1,7 @@
 import torch
 
-from bert.positional_embedding import PositionalEmbedding
+from .positional_embedding import PositionalEmbedding
+
 
 class BERTEmbedding(torch.nn.Module):
     """
@@ -24,10 +25,9 @@ class BERTEmbedding(torch.nn.Module):
         self.token = torch.nn.Embedding(vocab_size, embed_size, padding_idx=0)
         self.position = PositionalEmbedding(d_model=embed_size, max_len=seq_len)
         self.dropout = torch.nn.Dropout(p=dropout)
-       
+
     def forward(self, sequence):
-        # print("*** *** *** *** DEVICES: ", sequence.device, self.token.weight.device, self.position.pe.device)
-        x = self.token(sequence) 
+        x = self.token(sequence)
         y = self.position(sequence)
         z = x + y
         return self.dropout(z)

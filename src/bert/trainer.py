@@ -1,14 +1,15 @@
 import time
-from venv import logger
 import torch
 import logging
 from pathlib import Path
 from contextlib import nullcontext
 
-from bert.timer import Timer
-from bert.dump_sentences import DumpStentences
+from utils.timer import Timer
+from bert.ml.mlm.dump_sentences import DumpStentences
+
 
 logger = logging.getLogger(__name__)
+
 
 class Trainer:
     def __init__(self, config, model, optimizer, tokenizer):
@@ -131,11 +132,7 @@ class Trainer:
                 loss_logits = logits.transpose(1, 2)
                 loss = torch.nn.functional.cross_entropy(loss_logits, Y, ignore_index=0)
             else:
-                loss_logits = logits
-            loss = torch.nn.functional.cross_entropy(loss_logits, Y)
-            # logger.info("v logits shape: %s, Y shape: %s", loss_logits.shape, Y.shape)
-            # logger.info("v logits: %s", loss_logits)
-            # logger.info("v Y: %s", Y)
+                loss = torch.nn.functional.cross_entropy(logits, Y)
 
         return logits, loss
 
@@ -275,10 +272,7 @@ class Trainer:
             else:
                 # For classification tasks like CoLA
                 loss_logits = logits  # Shape: [batch_size, num_classes]
-                # logger.info("t logits shape: %s, Y shape: %s", loss_logits.shape, Y.shape)
                 loss = torch.nn.functional.cross_entropy(loss_logits, Y)  # Y should be [batch_size]
-            # logger.info("t logits: %s", logits)
-            # logger.info("t Y: %s", Y)
 
             losses.append(loss)
 
@@ -403,7 +397,7 @@ class Trainer:
 
     def get_mlm_dataset(self, epoch, split):
         import glob
-        from bert.bert_mlm_dataset_precached import BertMlmDatasetPrecached
+        from data.mlm.bert_mlm_dataset_precached import BertMlmDatasetPrecached
 
         if split == 'train':
             pattern = self.config.train.dataset_pattern
@@ -429,7 +423,7 @@ class Trainer:
 
     def get_cola_dataset(self, split):
         assert split in ('train', 'val')
-        from bert.cola.cola_dataset import ColaDataset
+        from data.cola_dataset import ColaDataset
         if split == 'train':
             filename = 'in_domain_train.tsv'
         elif split == 'val':

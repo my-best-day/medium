@@ -7,7 +7,7 @@ the list of token-ids and then store it in a binary file.
 
 BertMlmIdsSampleGenerator creates the MLM sample by maksing 15% of the tokens.
 """
-from bert.timer import Timer
+from utils.timer import Timer
 
 import logging
 import gzip

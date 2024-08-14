@@ -1,4 +1,4 @@
-from utils.config import RunConfig, TrainConfig, ModelConfig, Config
+from .config import RunConfig, TrainConfig, ModelConfig, Config
 
 
 def get_config(args):

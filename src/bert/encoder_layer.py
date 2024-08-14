@@ -1,7 +1,7 @@
 """Encoder layer of a Transformer model."""
 import torch
-from bert.feed_forward import FeedForward
-from bert.multi_headed_attention import MultiHeadedAttention
+from .feed_forward import FeedForward
+from .multi_headed_attention import MultiHeadedAttention
 
 
 class EncoderLayer(torch.nn.Module):

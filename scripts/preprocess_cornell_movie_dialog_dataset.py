@@ -6,7 +6,7 @@ from sklearn.model_selection import train_test_split
 from transformers import BertTokenizer
 
 from bert.bert_mlm_dataset import BertMlmDataset
-from bert.timer import Timer
+from utils.timer import Timer
 
 
 def preprocess_and_cache_dataset(dataset, cache_file):
