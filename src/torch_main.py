@@ -148,6 +148,11 @@ def resume_from_checkpoint(config, model, optimizer, trainer):
 
     # load model state
     model_state = checkpoint['model']
+
+    if config.model.task_type != 'mlm':
+        # Filter out 'mask_lm' parameters
+        model_state = {k: v for k, v in checkpoint['model'].items() if 'mask_lm' not in k}
+
     is_wrapped = is_model_wrapped(config)
     # in DDP, load state dict into the underlying model, otherwise, load it directly
     (model.module if is_wrapped else model).load_state_dict(model_state)
