@@ -1,14 +1,16 @@
-# BERT Model and Training
+# BERT Model, MLM Pre-Training, and Binary Classification Fine-Tuning
 
-#### Based on and inspired by Andrej Karpathy's [nanoGPT](https://github.com/karpathy/nanoGPT) and [miniGPT](https://github.com/karpathy/minGPT)
+### Based on and inspired by Andrej Karpathy's [nanoGPT](https://github.com/karpathy/nanoGPT) and [miniGPT](https://github.com/karpathy/minGPT)
 
-I built this project in order to learn by doing the anatomy and implementation of the transformer architecture. Right now, the focus is on the BERT model. 
+I built this project in order to learn by doing the anatomy and implementation of the transformer architecture and the pre-training and fine-tuning training routines. Currently, the focus is on the BERT model. 
 
-#### Let's start with some results:
+### Let's start with some results:
+#### Pre-Training using MLM and the WikiText-103 dataset
+(Fine-Tuning result [below](#fine-tuning-result))
 
 ![Validation accuracy approaches 60%!](./etc/assets/MLM_val_accuracy.png)
 
-We achieved MLM accuracy **exceeding 60%** after pre-training from scratch on the WikiText-103 dataset. This is considered a good result. 
+The model achieved MLM accuracy **exceeding 60%** after pre-training from scratch on the WikiText-103 dataset. This is considered a good result. 
 
 Here is a cherry-picked example. The first block shows the predictions inside /slashes/. The second block is the original text.
 
@@ -54,11 +56,21 @@ he fire fighters
 
 In this carefully selected example the model guessed 13 out of the 15 masked tokens, an accuracy of 87%. 
 
-#### Hyperparameters 
-The above results were generated using the following configuration:   
+#### Fine-Tuning Using a Binary Classifier and the SST-2 Dataset<a id="fine-tuning-result"></a>
+
+![SST-2 Fine tuning accuracy reaches ~87%](./etc/assets/sst2_fine_tuning.png)  
+
+The model achieved a binary classification accuracy of approximately **87%** when fine-tuned on the SST-2 dataset. This is a solid result for a model of this size, pre-trained on a relatively modest dataset, WikiText-103, with a constrained budget. While the result is not extraordinary-after all, this implementation follows established techniques rather than introducing novel innovations-it demonstrates the robustness of the implementation, including  model construction, dataset preparation, training routines, hyperparameter tuning.
+
+
+### Hyperparameters 
+The above results were generated using the following setups:
+
+##### MLM Pre-Training Parameters
 ```
-seq-len = 128  
-batch-size = 200  
+task-type = mlm
+seq-len = 128
+batch-size = 100
 val-interval = 100
 d-model = 768
 heads = 12
@@ -75,24 +87,68 @@ warmup-iters = 1000
 lr-decay-iters = 45_000
 max-iters = 60_000
 weight-decay = 0.01
+
+case = dickens # TODO: rename
+base-dir = wiki
+# supports round-robin of datasets
+dataset-pattern = train_weke_128_*.msgpack
+val-dataset-pattern = val_weke_128_*.msgpack
+# DDP
+dist-master-addr = 127.0.0.1
+dist-master-port = 12233
+# misc
+max-checkpoints = 1
+wandb = false
+``` 
+
+##### SST-2 Binary Classification Fine-Tuning Parameters 
 ```
+task-type = sst2
+seq-len = 128
+batch-size = 64
+val-interval = 200
+d-model = 768
+heads = 12
+n-layer = 6
+dropout = 0.0
+
+async-to-device: true
+fused-adamw: true
+compile: true
+
+learning-rate = 6e-5
+min-learning-rate = 1e-7
+warmup-iters = 300
+lr-decay-iters = 8000
+max-iters = 10000
+weight-decay = 0.02
+
+case = dickens # change to something meaningful
+base-dir = wiki
+# for sst2, the file names are hardcoded in sst2_dataset.py
+# dataset-pattern = train_weke_256_*.msgpack
+# val-dataset-pattern = val_weke_256_*.msgpack
+# DDP
+dist-master-addr = 127.0.0.1
+dist-master-port = 12233
+# misc
+max-checkpoints = 1
+wandb = false
+``` 
 
 Adjust the dataset patterns towards the bottom of the config file to match your datasets.
 
-Note that a few parameters are not listed here  
-For now, you can adjust the number of micro-steps within src/bert/trainer.py, acount line 50:  
-`self.micro_step_count = 2`
-
-## Training the Model
+## Pre-Training the Model
 
 ### Dataset Generation
 
-See [here](./dataset_preperation.md) a discussion of two methods of generating precached datasets. 
+See [here](./dataset_preparation.md) a discussion of two methods of generating precached datasets. 
 
 #### Download Dataset 
 I used WikiText-103 which can be downloaded from [Kaggle](https://www.kaggle.com/datasets/dekomposition/wikitext103).
 
-This dataset is quite big, if you just toying arround, I suggest you chop it up:  
+This dataset is quite large, if you just experimenting, I suggest you chop it up.  
+
 `tail -n 180k ignore/wiki/wiki.train.tokens > ignore/wiki/wiki.train.tokens.180`
 
 #### Generation Scripts
@@ -100,7 +156,7 @@ This dataset is quite big, if you just toying arround, I suggest you chop it up:
 There are two sets of utilities to generate MLM precached datasets. 
 
 #### Text Segmentation
-Text segmentation is [explined here](./dataset_preperation.md#text-segmentation).
+Text segmentation is [explained here](./dataset_preparation.md#text-segmentation).
 
 Use:  [prepare_mlm_dataset.py](./scripts/prepare_mlm_dataset.py)  
 
@@ -130,7 +186,7 @@ See:
 tokenize_text.py convert the text to a list of token ids.  
 prepare_mlm_fixed_len_dataset_from_ids.py uses the output of tokenize_text to create samples by token splitting.
 
-### How to run the Training
+### How to run Pre-Training
 pip install -r requirements.txt
 
 ```sh
@@ -138,13 +194,16 @@ mkdir wiki wiki/input wiki/vocab wiki/datasets wiki/runs
 ```
 
 #### Download a vocab.txt
-For example from [Hugging Face](https://huggingface.co/google-bert/bert-base-uncased/tree/main). I used both this vocab and another one, smaller. Training runs faster, consuming less memory, with a smaller vocab, and in my case, the smaller vocab yielded better results. 
 
+For example, download it from [Hugging Face](https://huggingface.co/google-bert/bert-base-uncased/tree/main), or find it under [etc/vocab/vocab.txt](./etc/vocab/vocab.txt). I experimented with both. In my experience, training runs faster, consumes less memory, and yield better results with the smaller vocabulary.  
+
+You want to copy it to `<base-dir>/vocab`
+
+#### Install and adjust the config file
 
 `cp etc/templates/config_template.ini config.ini`
 
-if you are running on a machine without gpu/cuda, also copy:  
-`cp etc/tempaltes/local_config_template.ini local_config.ini`
+if you are running on a machine without gpu/cuda, see `local_config_template.ini` for more modest settings.
 
 if you're using `local_config.ini`, edit that file, otherwise edit `config.ini`
 
@@ -162,7 +221,23 @@ if you're lucky and have multiple gpus you may use:
 ```sh
 python src/main.py --ddp --nproc 2
 ```  
-adjust nproc to your gpu count
+adjust `nproc` to the number of GPUs available.
+
+### Fine-Tuning 
+
+Download and copy the dataset to `<base-dir>/datasets`, for example, copy 
+`{train|validation|test}-00000-of-00001.parquet` files from the SST-2 dataset into the datasets directory.
+
+See settings in [etc/templates/config_sst2.ini](./etc/templates/config_sst2.ini) for the relevant values to be used for fine-tuning. You config file still needs to be named config.ini.
+
+You need to start from a checkpoint created during the pre-training to begin fine-turning:
+
+For example:   
+
+`python src/main --cp wiki/runs/run0/checkpoints/checkpoint.pt`
+
+DDP is not supported for the fine-tuning (which requires far fewer resources anyway.)
+
 
 ### Your directory structure should look something like:
 ```
@@ -190,6 +265,6 @@ wiki
 
 ### Todo:
 * Adjust the model to also support the GPT model and train it
-* Fine tune the model. So far I only pre-trained it
+* ~~Fine tune the model. So far I only pre-trained it~~ **Done!**
 * Create a inference use case example
 * Consider adopting more changes from DistilBERT
