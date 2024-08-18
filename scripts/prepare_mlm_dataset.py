@@ -17,7 +17,7 @@ and by how much.
 3. feed the chunks into the BERT dataset to create a preprocessed dataset.
    and dump it to a file that we will use during training.
 """
-from bert.bert_mlm_dataset import BertMlmDataset
+from transformer.bert_mlm_dataset import BertMlmDataset
 from utils.timer import Timer
 
 import re

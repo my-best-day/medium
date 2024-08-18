@@ -1,14 +1,14 @@
 import torch
-from bert.bert import BERT
-from bert.lm.mlm.masked_language_model import MaskedLanguageModel
+from transformer.transformer import Transformer
+from transformer.lm.mlm.masked_language_model import MaskedLanguageModel
 
 
-class BERTLM(torch.nn.Module):
+class BertMlmModel(torch.nn.Module):
     """
     BERT MLM Language Model
     """
 
-    def __init__(self, bert: BERT, vocab_size, apply_softmax):
+    def __init__(self, bert: Transformer, vocab_size, apply_softmax):
         """
         BERT MLM Language Model
 

@@ -264,7 +264,8 @@ wiki
 
 
 ### Todo:
-* Adjust the model to also support the GPT model and train it
 * ~~Fine tune the model. So far I only pre-trained it~~ **Done!**
+* Adjust the model to also support the GPT model and train it
 * Create a inference use case example
+* test performance using test splits
 * Consider adopting more changes from DistilBERT

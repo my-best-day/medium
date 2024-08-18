@@ -47,7 +47,11 @@ def wrap_parallel_model(config, model):
 
 
 def get_tokenizer(config):
-    """Returns the tokenizer for the given case"""
+    """
+    Returns the tokenizer for the given case
+
+    TODO: for GPT use GPT2TokenizerFast with its own vocab file. OK to start with BERT tokenizer.
+    """
     if config.run.case == 'movies' or config.run.case == 'dickens':
         from transformers import BertTokenizer
         path = config.run.base_dir / 'vocab/'
@@ -67,9 +71,10 @@ def get_tokenizer(config):
 def get_model(config, tokenizer):
     """
     Returns the language model for the given config and tokenizer.
-    TODO: handle GPT
+    Compiles the model if required.
+    Wrap the model with Distributed/DataParallel if required.
     """
-    model = get_bert_model(config, tokenizer)
+    model = get_lm_model(config, tokenizer)
 
     if config.run.compile:
         # requires PyTorch 2.0
@@ -83,38 +88,56 @@ def get_model(config, tokenizer):
     return model
 
 
-def get_bert_model(config, tokenizer):
-    from bert.bert import BERT
-    from bert.bertlm import BERTLM
-    from bert.lm.classifier.bert_classifier_model import BertClassifierModel
+def get_lm_model(config, tokenizer):
+    """
+    Return a language model for the given config and tokenizer.
+    A transformer with a language model head.
+    """
+    from transformer.lm.mlm.bert_mlm_model import BertMlmModel
+    from transformer.lm.classifier.bert_classifier_model import BertClassifierModel
+    from transformer.lm.gpt.gpt_model import GptModel
+
+    vocab_size = len(tokenizer.vocab)
+
+    transformer_model = get_transformer_model(config, tokenizer)
+
+    if config.model.task_type in ('cola', 'sst2'):
+        lm_model = BertClassifierModel(transformer_model, 2)
+    elif config.model.task_type == 'mlm':
+        lm_model = BertMlmModel(transformer_model, vocab_size, apply_softmax=False)
+    elif config.model.task_type == 'gpt':
+        lm_model = GptModel(transformer_model, vocab_size)
+    else:
+        raise ValueError('Unknown task type %s', config.model.task_type)
+
+    return lm_model
+
+
+def get_transformer_model(config, tokenizer):
+    """
+    Returns the base, transformer model for the given config and tokenizer.
+    """
+    from transformer.transformer import Transformer
 
     model_config = config.model
     vocab_size = len(tokenizer.vocab)
 
-    # todo: if resuming from a ehckpoint, load the model from the checkpoint
-    # todo: and reconcile / adjust / validate the model config
-
-    bert_model = BERT(
+    transformer_model = Transformer(
         vocab_size=vocab_size,
         d_model=model_config.d_model,
         n_layers=model_config.n_layers,
         heads=model_config.heads,
         dropout=config.train.dropout,
-        seq_len=model_config.seq_len
+        seq_len=model_config.seq_len,
+        is_gpt=config.model.task_type == 'gpt',
+        use_flash=config.run.flash
     )
 
-    if config.model.task_type in ('cola', 'sst2'):
-        bert_lm = BertClassifierModel(bert_model, 2)
-    elif config.model.task_type == 'mlm':
-        bert_lm = BERTLM(bert_model, vocab_size, apply_softmax=False)
-    else:
-        raise ValueError('Unknown task type %s', config.model.task_type)
-
-    return bert_lm
+    return transformer_model
 
 
 def get_trainer(config, model, optimizer, tokenizer):
-    from bert.trainer import Trainer
+    from transformer.trainer import Trainer
     trainer = Trainer(config, model, optimizer, tokenizer)
     return trainer
 
@@ -125,7 +148,7 @@ def create_objects_and_trainer(config):
     # right tokenizer by case (movies, instacart, dickens)
     tokenizer = get_tokenizer(config)
 
-    # BERT lang model / GPT (pending...)
+    # Transformer Model (BERT/GPT) witha language model head
     model = get_model(config, tokenizer)
 
     total_model_parameters = sum([p.nelement() for p in model.parameters()])

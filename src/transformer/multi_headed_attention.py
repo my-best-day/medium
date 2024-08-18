@@ -3,16 +3,13 @@ import math
 import torch
 import logging
 
-use_flash = True
-is_gpt = False
-
 
 ### attention layers
 class MultiHeadedAttention(torch.nn.Module):
     """
     Multi-Head Attention module for a Transformer model.
     """
-    def __init__(self, heads, d_model, max_len, dropout=0.1):
+    def __init__(self, heads, d_model, max_len, dropout, is_gpt, use_flash):
         super(MultiHeadedAttention, self).__init__()
 
         assert d_model % heads == 0
@@ -21,6 +18,7 @@ class MultiHeadedAttention(torch.nn.Module):
         self.max_len = max_len
         self.dropout_value = dropout
         self.dropout = torch.nn.Dropout(dropout)
+        self.is_causal = is_gpt
         self.causal = is_gpt
         self.flash = use_flash and hasattr(torch.nn.functional, 'scaled_dot_product_attention')
         logging.info(f'Using flash: {self.flash}')
@@ -62,7 +60,7 @@ class MultiHeadedAttention(torch.nn.Module):
             #      (batch_size, h, max_len, max_len)
             scores = torch.matmul(query, key.permute(0, 1, 3, 2)) / math.sqrt(query.size(-1))
 
-            if is_gpt and not self.flash:
+            if self.is_causal and not self.flash:
                 scores = scores.masked_fill(
                     self.bias[:, :, :self.max_len, :self.max_len] == 0, float('-inf'))
 

@@ -5,7 +5,7 @@ from sklearn.model_selection import train_test_split
 
 from transformers import BertTokenizer
 
-from bert.bert_mlm_dataset import BertMlmDataset
+from transformer.bert_mlm_dataset import BertMlmDataset
 from utils.timer import Timer
 
 

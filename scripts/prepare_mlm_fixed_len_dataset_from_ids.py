@@ -8,7 +8,7 @@ the list of token-ids and then store it in a binary file.
 BertMlmIdsSampleGenerator creates the MLM sample by maksing 15% of the tokens.
 """
 from utils.timer import Timer
-
+import re
 import logging
 import gzip
 import random
@@ -126,7 +126,7 @@ where wiki is the label, 128 is the max length, and 123 is the random seed.
     if not args.input.exists():
         raise FileNotFoundError(f"Input file {args.input} not found.")
 
-    if not args.label.isalnum():
+    if not re.match(r"[\w.-]+", args.label):
         raise ValueError(f"Label must be an alphanumeric string: {args.label}")
 
     args.output = Path(args.output)

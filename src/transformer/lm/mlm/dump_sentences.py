@@ -73,8 +73,6 @@ class DumpStentences:
                         sentence[i], range(len(sentence)))
         source = self.tokenizer.convert_ids_to_tokens(sentence2)
         source = self.convert_tokens_to_string(source)
-        # english = english[:144]
-        # source = source[:144]
         return f"{english}\n{source}"
 
     def convert_id_to_token(self, id):

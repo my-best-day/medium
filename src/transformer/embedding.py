@@ -1,14 +1,15 @@
 import torch
+import logging
 
 from .positional_embedding import PositionalEmbedding
 
 
-class BERTEmbedding(torch.nn.Module):
+class ModelEmbedding(torch.nn.Module):
     """
-    BERT Embedding which is consisted with under features
+    Model Embedding which is consisted with under features
         1. TokenEmbedding : normal embedding matrix
         2. PositionalEmbedding : adding positional information using sin, cos
-        sum of all these features are output of BERTEmbedding
+        sum of all these features are output of ModelEmbedding
     """
 
     def __init__(self, vocab_size, embed_size, seq_len, dropout):
@@ -27,7 +28,12 @@ class BERTEmbedding(torch.nn.Module):
         self.dropout = torch.nn.Dropout(p=dropout)
 
     def forward(self, sequence):
-        x = self.token(sequence)
-        y = self.position(sequence)
-        z = x + y
-        return self.dropout(z)
+        try:
+            x = self.token(sequence)
+            y = self.position(sequence)
+            z = x + y
+            return self.dropout(z)
+        except Exception as e:
+            logger = logging.getLogger(__name__)
+            logger.error(f"Error in ModelEmbedding forward: {e}")
+            raise e

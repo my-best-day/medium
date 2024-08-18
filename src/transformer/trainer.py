@@ -4,11 +4,14 @@ import logging
 from pathlib import Path
 from contextlib import nullcontext
 
+from transformer.lm.gpt.generate_sentence import GenerateSentence
 from utils.timer import Timer
-from bert.lm.mlm.dump_sentences import DumpStentences
+from transformer.lm.mlm.dump_sentences import DumpStentences
 
 
 logger = logging.getLogger(__name__)
+
+SKIP_ACCURACY = -1
 
 
 class Trainer:
@@ -18,7 +21,12 @@ class Trainer:
         self.optimizer = optimizer
         self.tokenizer = tokenizer
 
-        self.dumper = DumpStentences(tokenizer)
+        if self.config.model.task_type == 'mlm':
+            self.dumper = DumpStentences(tokenizer)
+        elif self.config.model.task_type == 'gpt':
+            seq_len = self.config.model.seq_len
+            num_new_tokens = int(seq_len * 0.3)
+            self.dumper = GenerateSentence(model, tokenizer, seq_len, num_new_tokens)
 
         # 'float32', 'bfloat16', or 'float16', the latter will auto implement a GradScaler
         dtype = 'bfloat16' if torch.cuda.is_available() and torch.cuda.is_bf16_supported() else \
@@ -68,7 +76,7 @@ class Trainer:
             # enter micro-step
             accumulated_loss = 0.0
             for micro_step in range(self.micro_step_count):
-                logits, loss = self.forward_and_loss(micro_step, X, Y)  # NOSONAR
+                logits, loss = self.training_forward_and_loss(micro_step, X, Y)  # NOSONAR
                 X, Y = self.get_batch('train')
                 loss /= self.micro_step_count
                 accumulated_loss += loss
@@ -122,18 +130,24 @@ class Trainer:
 
         return lr
 
-    def forward_and_loss(self, micro_step, X, Y):  # NOSONAR upper case X, Y denote batch tensors
+    def training_forward_and_loss(self, micro_step, X, Y):  # NOSONAR X, Y denote batch tensors
         # in ddp, inhibit sync for all but the last micro-step
         sync_ctx = self.get_sync_context(micro_step)
 
         with self.autocast_ctx, sync_ctx:
-            logits = self.model(X)
-            if self.config.model.task_type == 'mlm':
-                loss_logits = logits.transpose(1, 2)
-                loss = torch.nn.functional.cross_entropy(loss_logits, Y, ignore_index=0)
-            else:
-                loss = torch.nn.functional.cross_entropy(logits, Y)
+            logits, loss = self.forward_and_loss(X, Y)
+        return logits, loss
 
+    def forward_and_loss(self, X, Y):  # NOSONAR X, Y denote batch tensors
+        logits = self.model(X)
+        if self.config.model.task_type in ['mlm', 'gpt']:
+            # For MLM or GPT tasks
+            loss_logits = logits.transpose(1, 2)  # Shape: [batch_size, vocab_size, seq_len]
+            loss = torch.nn.functional.cross_entropy(loss_logits, Y, ignore_index=0)
+        else:
+            # For other tasks
+            loss_logits = logits  # Shape: [batch_size, num_classes]
+            loss = torch.nn.functional.cross_entropy(loss_logits, Y)  # Y should be [batch_size]
         return logits, loss
 
     def get_sync_context(self, micro_step):
@@ -203,16 +217,20 @@ class Trainer:
             f'lr: {lr * 1000:6.4f} e-3',
             f't.loss: {loss_str}',
             f'v.loss: {val_loss:5.2f}',
-            f'v.accu: {val_accuracy:.1%}',
         ]
+        if val_accuracy != SKIP_ACCURACY:
+            items.append(f'v.acc: {val_accuracy:5.2%}')
+
         msg = ' | '.join(items)
+
         logger.info(msg)
 
     def log_tensorboard(self, train_loss, val_loss, val_accuracy, lr):
         if train_loss is not None:
             self.writer.add_scalar('train_loss', train_loss, self.iter)
         self.writer.add_scalar('val_loss', val_loss, self.iter)
-        self.writer.add_scalar('val_accuracy', val_accuracy, self.iter)
+        if val_accuracy != SKIP_ACCURACY:
+            self.writer.add_scalar('val_accuracy', val_accuracy, self.iter)
         self.writer.add_scalar('lr', lr, self.iter)
 
     def log_wandb(self, train_loss, val_loss, val_accuracy, lr):
@@ -237,7 +255,7 @@ class Trainer:
 
         torch.save(
             {
-                'format': 'bert1',
+                'format': f'{self.config.model.task_type}.1',
                 'version': 1.0,
                 'iter': iter,
                 'model': (self.model.module if is_wrapped else self.model).state_dict(),
@@ -253,27 +271,24 @@ class Trainer:
         return result
 
     @torch.no_grad()
-    def estimate_val_loss(self):
+    def estimate_val_loss(self) -> tuple[float, float]:
+        """
+        Estimate the validation loss, and accuracy by running the model on the validation set.
+
+        Returns:
+            val_loss: The estimated validation loss
+            val_accuracy: The estimated validation accuracy if applicable, otherwise SKIP_ACCURACY
+        """
         losses = []
         total = 0
         correct = 0
 
         self.model.eval()
 
-        dump_sentences = self.config.model.task_type == 'mlm'
+        dump_sentences = self.config.model.task_type in ['mlm', 'gpt']
         for _ in range(self.val_iters):
             X, Y = self.get_batch('val')
-            logits = self.model(X)
-
-            if self.config.model.task_type == 'mlm':
-                # For MLM tasks
-                loss_logits = logits.transpose(1, 2)  # Shape: [batch_size, vocab_size, seq_len]
-                loss = torch.nn.functional.cross_entropy(loss_logits, Y, ignore_index=0)
-            else:
-                # For classification tasks like CoLA
-                loss_logits = logits  # Shape: [batch_size, num_classes]
-                loss = torch.nn.functional.cross_entropy(loss_logits, Y)  # Y should be [batch_size]
-
+            logits, loss = self.forward_and_loss(X, Y)
             losses.append(loss)
 
             if dump_sentences:
@@ -288,7 +303,10 @@ class Trainer:
             y_flat = Y.view(-1)
             predicted_flat = predicted.view(-1)
 
-            if self.config.model.task_type == 'mlm':
+            if self.config.model.task_type == 'gpt':
+                correct = SKIP_ACCURACY
+                total = SKIP_ACCURACY
+            elif self.config.model.task_type == 'mlm':
                 # mask: ignore padding (assumed 0) and focus on masked tokens (assumed non zero)
                 mask = (y_flat != 0)
                 total += mask.sum().item()
@@ -300,10 +318,12 @@ class Trainer:
         self.model.train()
 
         val_loss = sum(losses) / len(losses)
-        val_accuracy = correct / total
-
         val_loss = self.sync_up(val_loss)
-        val_accuracy = self.sync_up(val_accuracy)
+        if correct != SKIP_ACCURACY:
+            val_accuracy = correct / total
+            val_accuracy = self.sync_up(val_accuracy)
+        else:
+            val_accuracy = SKIP_ACCURACY
 
         return val_loss, val_accuracy
 
@@ -387,7 +407,9 @@ class Trainer:
         return loader
 
     def get_dataset(self, epoch, split):
-        if self.config.model.task_type == 'mlm':
+        if self.config.model.task_type == 'gpt':
+            dataset = self.get_gpt_dataset(epoch, split)
+        elif self.config.model.task_type == 'mlm':
             dataset = self.get_mlm_dataset(epoch, split)
         elif self.config.model.task_type == 'cola':
             dataset = self.get_cola_dataset(split)
@@ -397,31 +419,29 @@ class Trainer:
             raise ValueError(f"Unknown dataset: {self.config.run.dataset}")
         return dataset
 
-    def get_mlm_dataset(self, epoch, split):
-        import glob
-        from data.mlm.bert_mlm_dataset_precached import BertMlmDatasetPrecached
+    def get_gpt_dataset(self, epoch, split):
+        from data.gpt.gpt_token_ids_dataset import GptTokenIdsDataset
+        seq_len = self.config.model.seq_len
+        percentage = self.get_percentage(split)
+        dataset_file = self.find_dataset_file(epoch, split)
+        dataset = GptTokenIdsDataset(dataset_file, seq_len, percentage)
+        return dataset
 
+    def get_mlm_dataset(self, epoch, split):
+        from data.mlm.bert_mlm_dataset_precached import BertMlmDatasetPrecached
+        percentage = self.get_percentage(split)
+        dataset_file = self.find_dataset_file(epoch, split)
+        dataset = BertMlmDatasetPrecached(dataset_file, percentage)
+        return dataset
+
+    def get_percentage(self, split):
         if split == 'train':
-            pattern = self.config.train.dataset_pattern
             percentage = self.config.train.dataset_percentage
         elif split == 'val':
-            pattern = self.config.train.val_dataset_pattern
             percentage = self.config.train.val_dataset_percentage
         else:
             raise ValueError(f"Unknown split: {split}")
-
-        pattern = str(self.config.run.datasets_dir / pattern)
-        # add an optional .gz extension to the pattern
-        dataset_files = glob.glob(pattern) + glob.glob(pattern + '.gz')
-        if len(dataset_files) == 0:
-            raise ValueError(f"Dataset files not found with pattern {pattern}")
-        dataset_files = sorted(dataset_files)
-        dataset_file = dataset_files[epoch % len(dataset_files)]
-
-        logger.info(f"*** *** *** *** Epoch: {epoch} - Loading dataset from {dataset_file}")
-
-        dataset = BertMlmDatasetPrecached(dataset_file, percentage)
-        return dataset
+        return percentage
 
     def get_cola_dataset(self, split):
         assert split in ('train', 'val')
@@ -445,3 +465,27 @@ class Trainer:
         path = self.config.run.datasets_dir / filename
         dataset = Sst2Dataset(path, self.tokenizer, self.config.model.seq_len)
         return dataset
+
+    def find_dataset_file(self, epoch, split):
+        """
+        Find the dataset file for the given epoch and split.
+        """
+        import glob
+        if split == 'train':
+            pattern = self.config.train.dataset_pattern
+        elif split == 'val':
+            pattern = self.config.train.val_dataset_pattern
+        else:
+            raise ValueError(f"Unknown split: {split}")
+
+        pattern = str(self.config.run.datasets_dir / pattern)
+        # add an optional .gz extension to the pattern
+        dataset_files = glob.glob(pattern) + glob.glob(pattern + '.gz')
+        if len(dataset_files) == 0:
+            raise ValueError(f"Dataset files not found with pattern {pattern}")
+        dataset_files = sorted(dataset_files)
+        dataset_file = dataset_files[epoch % len(dataset_files)]
+
+        logger.info(f"*** *** *** *** Epoch: {epoch} - Loading dataset from {dataset_file}")
+
+        return dataset_file

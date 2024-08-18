@@ -1,7 +1,7 @@
 import glob
 import torch
 from data.mlm.bert_mlm_dataset_precached import BertMlmDatasetPrecached
-from bert.lm.mlm.dump_sentences import describe
+from transformer.lm.mlm.dump_sentences import describe
 from utils.timer import Timer
 
 device = 'cuda' if torch.cuda.is_available() else 'cpu'

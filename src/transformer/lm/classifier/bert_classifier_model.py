@@ -1,5 +1,5 @@
 import torch
-from bert.bert import BERT
+from transformer.transformer import Transformer
 from .classifier_language_model import ClassifierModel
 
 
@@ -8,7 +8,7 @@ class BertClassifierModel(torch.nn.Module):
     BERT Classifier Model
     """
 
-    def __init__(self, bert: BERT, num_labels: int):
+    def __init__(self, bert: Transformer, num_labels: int):
         """
         BERT Classifier Model
         """
