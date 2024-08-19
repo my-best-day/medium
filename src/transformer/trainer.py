@@ -58,6 +58,14 @@ class Trainer:
         # todo: take from config
         self.start_iter = 0
         self.iter = self.start_iter
+
+        # switching from iter to sample count
+        self.sample_seen_count = 0
+        self.sample_seen_start = self.sample_seen_count
+
+        is_ddp = self.config.run.parallel_mode == 'ddp'
+        self.world_size = torch.distributed.get_world_size() if is_ddp else 1
+
         self.micro_step_count = 1
         self.grad_clip = 1.0
         self.val_iters = 10
@@ -81,6 +89,7 @@ class Trainer:
                 loss /= self.micro_step_count
                 accumulated_loss += loss
                 self.backward(loss)
+                self.sample_seen_count += X.size(0) * self.world_size
             # outside micro-step
             logger.debug(f"loss: {accumulated_loss}")
             losses.append(accumulated_loss)
