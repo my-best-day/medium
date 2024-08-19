@@ -1,8 +1,15 @@
-# BERT Model, MLM Pre-Training, and Binary Classification Fine-Tuning
+# BERT and GPT Models - Pre-Training and Fine-Tuning
 
 ### Based on and inspired by Andrej Karpathy's [nanoGPT](https://github.com/karpathy/nanoGPT) and [miniGPT](https://github.com/karpathy/minGPT)
 
-I built this project in order to learn by doing the anatomy and implementation of the transformer architecture and the pre-training and fine-tuning training routines. Currently, the focus is on the BERT model. 
+I built this project to learn the anatomy and implementation of the transformer architecture by hands-on practice. This includes exploring pre-training and fine-tuning training routines. 
+
+I started working on BERT and I'm now adding GPT. GPT the model, and its pre-training are already here. The next steps involve improving support for both models and adding fine-tuning for GPT. 
+
+The readme update is pending, as I need to cover GPT, recent additions, and major re-factoring.   
+See [todo.txt](./todo.txt) for the plan ahead.   
+
+
 
 ### Let's start with some results:
 #### Pre-Training using MLM and the WikiText-103 dataset
@@ -260,12 +267,3 @@ wiki
       - checkpoints
          checkpoint.pt
   ```
-
-
-
-### Todo:
-* ~~Fine tune the model. So far I only pre-trained it~~ **Done!**
-* Adjust the model to also support the GPT model and train it
-* Create a inference use case example
-* test performance using test splits
-* Consider adopting more changes from DistilBERT

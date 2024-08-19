@@ -1,0 +1,28 @@
+# Road blocks
+
+* ~~Fine tune the model. So far I only pre-trained it~~ **Done!**
+* Adjust the model to also support the GPT model and train it - still WIP, but pre-training works now.
+* add fine-tuning of GPT
+* ADD UNIT TESTS
+* Create a inference use case example
+* test performance using test splits
+* Consider adopting more changes from DistilBERT
+
+
+# Next tasks
+* fix resuming from a checkpoint in torch_main.py
+- load the entire model state if checkpoint.task_type == config.task_type
+- load iteration, and other stuff not only if mlm but as long as the type is the same
+
+* after the above is fixed, continue with gpt training using next_config_gpt.ini which
+adjust warmup iter, and decay-iter to have another bump in the learning rate
+
+* adjust readme to the new structure. add stuff about gpt, including results
+
+* add initialization of the parameters / weights "important for GPT"
+* if not loading model state from checkpoint, use the above initialization, that is:
+- init_weigths():
+-- init base model weights
+-- init lm model weights
+
+** unit test **
