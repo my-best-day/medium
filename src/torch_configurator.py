@@ -7,6 +7,7 @@ import torch
 import inspect
 from transformer.task_handler.task_handler_common import TaskHandlerCommon as THC
 from transformer.task_handler.mlm_task_handler import MlmTaskHandler
+from transformer.task_handler.sst2_task_handler import Sst2TaskHandler
 
 
 logger = logging.getLogger(__name__)
@@ -103,8 +104,11 @@ class TorchConfigurator:
         task_type = self.config.model.task_type
         if task_type == 'mlm':
             task_handler = MlmTaskHandler(self.config, self.tokenizer)
+        elif task_type == 'sst2':
+            task_handler = Sst2TaskHandler(self.config, self.tokenizer)
         else:
             raise ValueError(f"Unknown task type: {task_type}")
+
         return task_handler
 
     def create_objects_and_trainer(self):
@@ -341,65 +345,51 @@ class TorchConfigurator:
         if config.run.parallel_mode != 'ddp':
             return
 
+        self.sync_model()
+        self.sync_optimizer()
+        self.sync_trainer_state()
+
+    def sync_model(self):
         for param in self.model.parameters():
             torch.distributed.broadcast(param.data, src=0)
 
-        # sync optimizer state
-        if not config.run.skip_sync_optimizer_state:
-            for group in self.optimizer.param_groups:
-                for param in group['params']:
-                    if param.requires_grad:
-                        torch.distributed.broadcast(param.data, src=0)
-            torch.distributed.broadcast(self.optimizer.state, src=0)
-
         # ensure synchronization across all ranks
+        logger.debug("before model's barrier (rank=%s)", self.config.run.local_rank)
         torch.distributed.barrier()
-
-        # sync trainer state
-        self.sync_trainer_state()
+        logger.info("after model's barrier (rank=%s)", self.config.run.local_rank)
 
     def sync_optimizer(self):
-        """
-        Sync the optimizer state across all ranks
-        """
+        optimizer_state = self.optimizer.state_dict()
+        torch.distributed.broadcast_object_list([optimizer_state], src=0)
+        if torch.distributed.get_rank() != 0:
+            self.optimizer.load_state_dict(optimizer_state)
 
-        # The optimizer params are the model params. We sync the model params
-        # earlier in the process, so there is no need to resync them here.
-
-        for _, state in self.optimizer.state.items():
-            if isinstance(state, torch.Tensor):
-                torch.distributed.broadcast(state, src=0)
-            elif isinstance(state, dict):
-                # handle nested state
-                for _, sub_state in state.items():
-                    if isinstance(sub_state, torch.Tensor):
-                        torch.distributed.broadcast(sub_state, src=0)
+        # ensure synchronization across all ranks
+        logger.debug("before optimizer's barrier (rank=%s)", self.config.run.local_rank)
+        torch.distributed.barrier()
+        logger.info("after optimizer's barrier (rank=%s)", self.config.run.local_rank)
 
     def sync_trainer_state(self):
         """ Sync the trainer state across all ranks """
-        device = self.config.run.device
-        pt_sample_iter_start = \
-            torch.tensor(self.trainer.sample_iter_start, dtype=torch.long).to(device)
-        pt_sample_iter = \
-            torch.tensor(self.trainer.sample_iter, dtype=torch.long).to(device)
-        pt_start_iter = \
-            torch.tensor(self.trainer.start_iter, dtype=torch.long).to(device)
-        pt_iter = \
-            torch.tensor(self.trainer.iter, dtype=torch.long).to(device)
-        pt_best_val_loss = \
-            torch.tensor(self.trainer.best_val_loss, dtype=torch.float).to(device)
+        trainer_state = [
+            self.trainer.sample_iter_start,
+            self.trainer.sample_iter,
+            self.trainer.start_iter,
+            self.trainer.iter,
+            self.trainer.best_val_loss
+        ]
 
-        torch.distributed.broadcast(pt_sample_iter_start, src=0)
-        torch.distributed.broadcast(pt_sample_iter, src=0)
-        torch.distributed.broadcast(pt_start_iter, src=0)
-        torch.distributed.broadcast(pt_iter, src=0)
-        torch.distributed.broadcast(pt_best_val_loss, src=0)
+        # Broadcast the trainer state as a list of Python objects
+        torch.distributed.broadcast_object_list(trainer_state, src=0)
 
         # ensure synchronization across all ranks
+        logger.debug("before trainer's barrier (rank=%s)", self.config.run.local_rank)
         torch.distributed.barrier()
+        logger.info("after trainer's barrier (rank=%s)", self.config.run.local_rank)
 
-        self.trainer.sample_iter_start = pt_sample_iter_start.item()
-        self.trainer.sample_iter = pt_sample_iter.item()
-        self.trainer.start_iter = pt_start_iter.item()
-        self.trainer.iter = pt_iter.item()
-        self.trainer.best_val_loss = pt_best_val_loss.item()
+        # Assign the broadcasted values back to the trainer state
+        self.trainer.sample_iter_start = trainer_state[0]
+        self.trainer.sample_iter = trainer_state[1]
+        self.trainer.start_iter = trainer_state[2]
+        self.trainer.iter = trainer_state[3]
+        self.trainer.best_val_loss = trainer_state[4]
