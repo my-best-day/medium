@@ -22,3 +22,11 @@ class BertMlmModel(torch.nn.Module):
     def forward(self, x):
         x = self.bert(x)
         return self.mask_lm(x)
+
+    @property
+    def base_model(self):
+        return self.bert
+
+    @property
+    def lm_head(self):
+        return self.mask_lm

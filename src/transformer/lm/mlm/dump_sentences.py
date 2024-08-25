@@ -5,16 +5,16 @@ format.
 """
 
 
-class DumpStentences:
+class DumpSentences:
     """
-    Takes a tokonized prediction and the corresponding labels and converts them to a human readable
+    Takes a tokenized prediction and the corresponding labels and converts them to a human readable
     format.
 
     :param tokenizer: The tokenizer used to convert the token ids to strings.
     """
     def __init__(self, tokenizer):
         """
-        Takes a tokonized prediction and the corresponding labels and converts them to a human
+        Takes a tokenized prediction and the corresponding labels and converts them to a human
         readable format.
         """
         self.tokenizer = tokenizer

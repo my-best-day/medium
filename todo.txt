@@ -21,8 +21,51 @@ adjust warmup iter, and decay-iter to have another bump in the learning rate
 
 * add initialization of the parameters / weights "important for GPT"
 * if not loading model state from checkpoint, use the above initialization, that is:
-- init_weigths():
+- init_weights():
 -- init base model weights
 -- init lm model weights
 
 ** unit test **
+
+
+NEXT:
+- test with CUDA
+- test with DDP
+
+
++ Need to complete mlm_task_handler, missing:
++   - method that drop predictions and original
++   - method that calculates val loss
++ also added methods to initialize the model and lm_head weights
+
++ Feed TaskHandler into TorchConfigurator - the handler is created
+  inside the configurator
+
++ Use task_handler in TorchConfigurator
+
+
+
+TaskHelper
+  get_lm_model
+      cola, sst2 -> BertClassifierModel
+      mlm -> BertMlmModel
+      gpt -> GptModel
+
+  resume_from_checkpoint
+      load the base-model
+      if checkpoint.task_type == self.task_type
+          load the lm_model
+      else
+          init weights lm_model
+
+  debug_dump -
+      for mlm logs the text with the predictions, compare to original tokens
+      for gpt logs the prompt and the generated text
+
+  estimate_accuracy
+      gpt: skip (-1)
+      mlm: (predicted == orig).count() / masked.count()
+      cola, sst2: (predicted == label) / label.size()
+
+  get_dataset
+      ...

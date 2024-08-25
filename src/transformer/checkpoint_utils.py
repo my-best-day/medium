@@ -18,9 +18,10 @@ def save_checkpoint(config, model, optimizer, iter: int, val_loss: float):
 
     torch.save(
         {
-            'format': f'{config.model.task_type}.1',
-            'version': 1.0,
+            'version': '1.2',
+            'task_type': config.model.task_type,
             'iter': iter,
+            'sample_counter': config.run.sample_counter,
             'model': (model.module if is_wrapped else model).state_dict(),
             'optimizer': optimizer.state_dict(),
             'val_loss': val_loss,
@@ -38,6 +39,28 @@ def resume_from_checkpoint(config, model, optimizer, trainer):
     logger.info("Resuming from checkpoint at %s", path)
     # use map_location='cpu' if GPU memory an issue (broadcasting required in that case!)
     checkpoint = torch.load(path, map_location=config.run.device)
+
+    if str(checkpoint['version']) == '1.0':
+        resume_from_checkpoint_v1(config, model, optimizer, trainer, checkpoint)
+    # elif checkpoint['version'] == '2.0':
+    #     resume_from_checkpoint_v2(config, model, optimizer, trainer, checkpoint)
+    else:
+        raise ValueError(f"Unknown checkpoint version: {checkpoint['version']}")
+
+
+def resume_from_checkpoint_v1(config, model, optimizer, trainer, checkpoint):
+    # torch.save(
+    #     {
+    #         'format': f'{config.model.task_type}.1',
+    #         'version': 1.0,
+    #         'iter': iter,
+    #         'model': (model.module if is_wrapped else model).state_dict(),
+    #         'optimizer': optimizer.state_dict(),
+    #         'val_loss': val_loss,
+    #         'config': config.to_dict(),
+    #     },
+    #     checkpoint_path
+    # )
 
     # load model state
     model_state = checkpoint['model']

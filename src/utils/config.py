@@ -36,8 +36,6 @@ class ModelConfig(BaseConfig):
 class TrainConfig(BaseConfig):
     batch_size: int
     val_interval: int
-    start_epoch: int
-    end_epoch: int
     dataset_pattern: str
     val_dataset_pattern: str
     weight_decay: float
@@ -53,20 +51,16 @@ class TrainConfig(BaseConfig):
     dropout: Optional[float] = None
     checkpoint: Optional[Path] = None
 
+    # When loading from a checkpoint, if the task has changed (e.g., MLM to classification),
+    # we skip loading the language model head, optimizer, and trainer states. If the task
+    # remains the same, set this flag to start a new training phase (e.g., switching from
+    # pre-training to fine-tuning or adjusting the training setup like learning rate schedule).
+    switch_training: bool = False
+
     max_checkpoints: Optional[int] = None
     lr_scheduler: Optional[str] = None
 
     def __post_init__(self):
-        if self.start_epoch < 0:
-            raise ValueError(f'Invalid start epoch {self.start_epoch}. Must be >= 0.')
-
-        if self.end_epoch < 0:
-            raise ValueError(f'Invalid end epoch {self.end_epoch}. Must be >= 0.')
-
-        if self.start_epoch > self.end_epoch:
-            raise ValueError(f'Invalid start epoch {self.start_epoch} and end epoch '
-                             f'{self.end_epoch}. Start epoch must be <= end epoch.')
-
         # max_checkpoints at least 1
         if self.max_checkpoints < 1:
             raise ValueError(f'Invalid max checkpoints {self.max_checkpoints}. Must be >= 1.')
@@ -111,6 +105,18 @@ class RunConfig(BaseConfig):
     is_primary: bool = True
 
     case: Optional[str] = None        # movies, instacart
+
+    # might be set to False if loading from a checkpoint
+    init_base_model_weights: bool = True
+    # might be set to False if loading from a checkpoint
+    init_lm_head_weights: bool = True
+
+    # might be set to False if loading from a checkpoint
+    # If loading from a checkpoint, we need to sync the optimizer state
+    # across all processes to ensure the optimizer state is consistent.
+    # Otherwise, the optimizer initialization is deterministic and we can skip
+    # the synchronization.
+    skip_sync_optimizer_state: bool = True
 
     def __post_init__(self):
         # verified by the caller, double checking here

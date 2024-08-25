@@ -3,10 +3,7 @@ import torch
 import logging
 from pathlib import Path
 from contextlib import nullcontext
-
-from transformer.lm.gpt.generate_sentence import GenerateSentence
 from utils.timer import Timer
-from transformer.lm.mlm.dump_sentences import DumpStentences
 
 
 logger = logging.getLogger(__name__)
@@ -15,25 +12,19 @@ SKIP_ACCURACY = -1
 
 
 class Trainer:
-    def __init__(self, config, model, optimizer, tokenizer):
+    def __init__(self, config, model, optimizer, task_handler):
         self.config = config
         self.model = model
         self.optimizer = optimizer
-        self.tokenizer = tokenizer
-
-        if self.config.model.task_type == 'mlm':
-            self.dumper = DumpStentences(tokenizer)
-        elif self.config.model.task_type == 'gpt':
-            seq_len = self.config.model.seq_len
-            num_new_tokens = int(seq_len * 0.3)
-            self.dumper = GenerateSentence(model, tokenizer, seq_len, num_new_tokens)
+        self.task_handler = task_handler
 
         # 'float32', 'bfloat16', or 'float16', the latter will auto implement a GradScaler
         dtype = 'bfloat16' if torch.cuda.is_available() and torch.cuda.is_bf16_supported() else \
             'float16'
 
         # initialize a GradScaler. If enabled=False scaler is a no-op
-        self.scaler = torch.amp.GradScaler(enabled=(dtype == 'float16'))
+        enable_grad_scaler = torch.cuda.is_available() and dtype == 'float16'
+        self.scaler = torch.amp.GradScaler(enabled=enable_grad_scaler)
 
         torch.backends.cuda.matmul.allow_tf32 = True  # allow tf32 on matmul
         torch.backends.cudnn.allow_tf32 = True  # allow tf32 on cudnn
@@ -42,13 +33,13 @@ class Trainer:
         device_type = self.config.run.device if isinstance(self.config.run.device, str) else \
             self.config.run.device.type
         # note: float16 data type will automatically use a GradScaler
-        ptdtype = {
+        pt_dtype = {
             'float32': torch.float32,
             'bfloat16': torch.bfloat16,
             'float16': torch.float16
         }[dtype]
         self.autocast_ctx = nullcontext() if device_type == 'cpu' else \
-            torch.amp.autocast(device_type=device_type, dtype=ptdtype)
+            torch.amp.autocast(device_type=device_type, dtype=pt_dtype)
 
         self.train_loader_iter = None
         self.val_loader_iter = None
@@ -60,8 +51,8 @@ class Trainer:
         self.iter = self.start_iter
 
         # switching from iter to sample count
-        self.sample_seen_count = 0
-        self.sample_seen_start = self.sample_seen_count
+        self.sample_iter = 0
+        self.sample_iter_start = self.sample_iter
 
         is_ddp = self.config.run.parallel_mode == 'ddp'
         self.world_size = torch.distributed.get_world_size() if is_ddp else 1
@@ -89,7 +80,7 @@ class Trainer:
                 loss /= self.micro_step_count
                 accumulated_loss += loss
                 self.backward(loss)
-                self.sample_seen_count += X.size(0) * self.world_size
+                self.sample_iter += X.size(0) * self.world_size
             # outside micro-step
             logger.debug(f"loss: {accumulated_loss}")
             losses.append(accumulated_loss)
@@ -149,14 +140,7 @@ class Trainer:
 
     def forward_and_loss(self, X, Y):  # NOSONAR X, Y denote batch tensors
         logits = self.model(X)
-        if self.config.model.task_type in ['mlm', 'gpt']:
-            # For MLM or GPT tasks
-            loss_logits = logits.transpose(1, 2)  # Shape: [batch_size, vocab_size, seq_len]
-            loss = torch.nn.functional.cross_entropy(loss_logits, Y, ignore_index=0)
-        else:
-            # For other tasks
-            loss_logits = logits  # Shape: [batch_size, num_classes]
-            loss = torch.nn.functional.cross_entropy(loss_logits, Y)  # Y should be [batch_size]
+        loss = self.task_handler.get_loss(logits, Y)
         return logits, loss
 
     def get_sync_context(self, micro_step):
@@ -262,18 +246,15 @@ class Trainer:
         name = "checkpoint.pt"
         checkpoint_path = self.config.run.checkpoints_dir / name
 
-        torch.save(
-            {
-                'format': f'{self.config.model.task_type}.1',
-                'version': 1.0,
-                'iter': iter,
-                'model': (self.model.module if is_wrapped else self.model).state_dict(),
-                'optimizer': self.optimizer.state_dict(),
-                'val_loss': val_loss,
-                'config': self.config.to_dict(),
-            },
-            checkpoint_path
+        checkpoint = self.task_handler.gen_checkpoint(
+            (self.model.module if is_wrapped else self.model),
+            self.optimizer,
+            iter,
+            self.sample_iter,
+            val_loss
         )
+
+        torch.save(checkpoint, checkpoint_path)
 
     def is_model_wrapped(self):
         result = self.config.run.parallel_mode in ('dp', 'ddp')
@@ -294,45 +275,34 @@ class Trainer:
 
         self.model.eval()
 
-        dump_sentences = self.config.model.task_type in ['mlm', 'gpt']
+        dump_sentences = True
         for _ in range(self.val_iters):
             X, Y = self.get_batch('val')
             logits, loss = self.forward_and_loss(X, Y)
             losses.append(loss)
 
             if dump_sentences:
+                self.task_handler.illustrate_predictions(X, Y, logits)
                 dump_sentences = False
-                debug_text = self.dumper.batched_debug(X, Y, logits)
-                print("\n".join(debug_text))
 
             probabilities = torch.softmax(logits, dim=-1)
             _, predicted = torch.max(probabilities, dim=-1)
 
-            # flatten tensors for comparison
-            y_flat = Y.view(-1)
-            predicted_flat = predicted.view(-1)
-
-            if self.config.model.task_type == 'gpt':
-                correct = SKIP_ACCURACY
-                total = SKIP_ACCURACY
-            elif self.config.model.task_type == 'mlm':
-                # mask: ignore padding (assumed 0) and focus on masked tokens (assumed non zero)
-                mask = (y_flat != 0)
-                total += mask.sum().item()
-                correct += (predicted_flat[mask] == y_flat[mask]).sum().item()
-            else:
-                total += Y.size(0)
-                correct += (predicted == Y).sum().item()
+            sample_total, sample_correct = self.task_handler.estimate_accuracy(Y, predicted)
+            if sample_total is not None:
+                total += sample_total
+            if sample_correct is not None:
+                correct += sample_correct
 
         self.model.train()
 
         val_loss = sum(losses) / len(losses)
         val_loss = self.sync_up(val_loss)
-        if correct != SKIP_ACCURACY:
+        if correct == SKIP_ACCURACY:
+            val_accuracy = SKIP_ACCURACY
+        else:
             val_accuracy = correct / total
             val_accuracy = self.sync_up(val_accuracy)
-        else:
-            val_accuracy = SKIP_ACCURACY
 
         return val_loss, val_accuracy
 
@@ -416,85 +386,4 @@ class Trainer:
         return loader
 
     def get_dataset(self, epoch, split):
-        if self.config.model.task_type == 'gpt':
-            dataset = self.get_gpt_dataset(epoch, split)
-        elif self.config.model.task_type == 'mlm':
-            dataset = self.get_mlm_dataset(epoch, split)
-        elif self.config.model.task_type == 'cola':
-            dataset = self.get_cola_dataset(split)
-        elif self.config.model.task_type == 'sst2':
-            dataset = self.get_sst2_dataset(split)
-        else:
-            raise ValueError(f"Unknown dataset: {self.config.run.dataset}")
-        return dataset
-
-    def get_gpt_dataset(self, epoch, split):
-        from data.gpt.gpt_token_ids_dataset import GptTokenIdsDataset
-        seq_len = self.config.model.seq_len
-        percentage = self.get_percentage(split)
-        dataset_file = self.find_dataset_file(epoch, split)
-        dataset = GptTokenIdsDataset(dataset_file, seq_len, percentage)
-        return dataset
-
-    def get_mlm_dataset(self, epoch, split):
-        from data.mlm.bert_mlm_dataset_precached import BertMlmDatasetPrecached
-        percentage = self.get_percentage(split)
-        dataset_file = self.find_dataset_file(epoch, split)
-        dataset = BertMlmDatasetPrecached(dataset_file, percentage)
-        return dataset
-
-    def get_percentage(self, split):
-        if split == 'train':
-            percentage = self.config.train.dataset_percentage
-        elif split == 'val':
-            percentage = self.config.train.val_dataset_percentage
-        else:
-            raise ValueError(f"Unknown split: {split}")
-        return percentage
-
-    def get_cola_dataset(self, split):
-        assert split in ('train', 'val')
-        from data.cola_dataset import ColaDataset
-        if split == 'train':
-            filename = 'in_domain_train.tsv'
-        elif split == 'val':
-            filename = 'in_domain_dev.tsv'
-        path = self.config.run.datasets_dir / filename
-        dataset = ColaDataset(path, self.tokenizer, self.config.model.seq_len)
-        return dataset
-
-    def get_sst2_dataset(self, split):
-        assert split in ('train', 'val')
-        from data.sst2_dataset import Sst2Dataset
-        if split == 'train':
-            prefix = 'train'
-        elif split == 'val':
-            prefix = 'validation'
-        filename = f'{prefix}-00000-of-00001.parquet'
-        path = self.config.run.datasets_dir / filename
-        dataset = Sst2Dataset(path, self.tokenizer, self.config.model.seq_len)
-        return dataset
-
-    def find_dataset_file(self, epoch, split):
-        """
-        Find the dataset file for the given epoch and split.
-        """
-        import glob
-        if split == 'train':
-            pattern = self.config.train.dataset_pattern
-        elif split == 'val':
-            pattern = self.config.train.val_dataset_pattern
-        else:
-            raise ValueError(f"Unknown split: {split}")
-
-        pattern = str(self.config.run.datasets_dir / pattern)
-        # add an optional .gz extension to the pattern
-        dataset_files = glob.glob(pattern) + glob.glob(pattern + '.gz')
-        if len(dataset_files) == 0:
-            raise ValueError(f"Dataset files not found with pattern {pattern}")
-        dataset_files = sorted(dataset_files)
-        dataset_file = dataset_files[epoch % len(dataset_files)]
-
-        logger.info(f"*** *** *** *** Epoch: {epoch} - Loading dataset from {dataset_file}")
-
-        return dataset_file
+        return self.task_handler.get_dataset(epoch, split)

@@ -14,8 +14,7 @@ def get_config(args):
         batch_size=args.batch_size,
         val_interval=args.val_interval,
         checkpoint=args.checkpoint,
-        start_epoch=args.start_epoch,
-        end_epoch=args.end_epoch,
+        switch_training=args.switch_training,
 
         learning_rate=args.learning_rate,
         min_learning_rate=args.min_learning_rate,

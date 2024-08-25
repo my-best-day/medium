@@ -11,6 +11,15 @@
             "request": "launch",
             "program": "${file}",
             "console": "integratedTerminal"
+        },
+        {
+            "name": "training main",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "src/main.py",
+            "console": "integratedTerminal",
+            "args": ["--cp", "wiki/runs/run1/checkpoints/checkpoint.pt"]
         }
+
     ]
 }

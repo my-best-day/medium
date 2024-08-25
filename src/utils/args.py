@@ -25,10 +25,6 @@ def get_args() -> configargparse.Namespace:  # NOSONAR: complex function, the al
     # Parse arguments
     args = parser.parse_args()
 
-    if args.end_epoch < args.start_epoch:
-        parser.exit(f'Invalid start epoch {args.start_epoch} and end epoch '
-                    f'{args.end_epoch}. Start epoch must be <= end epoch.')
-
     if args.case is None:
         parser.exit('Case must be specified.')
 
@@ -103,10 +99,11 @@ def add_train_arguments(parser: configargparse.ArgumentParser):
     parser.add_argument('--val-interval', type=int, default=None, help='Valuation interval')
     parser.add_argument('--checkpoint', '--cp', type=str, default=None, metavar='<path>',
                         help='Path to a specific checkpoint.')
-    parser.add_argument('--start_epoch', '--se', type=int, default=0,
-                        help='Epoch to start training from')
-    # ee deprecated
-    parser.add_argument('--end-epoch', '--ee', type=int, default=19, help='Epoch to end training')
+    parser.add_argument('--switch-training', action='store_true', default=False,
+                        help='Start a new training phase while keeping the same task. '
+                        'Skip loading the language model head, optimizer, and trainer states '
+                        'from the checkpoint (e.g., switch from pre-training to fine-tuning '
+                        'or modify the training setup).')
     parser.add_argument('--dataset-pattern', type=str, default=None, help='Dataset pattern')
     parser.add_argument('--val-dataset-pattern', type=str, default=None, help='Validation pattern')
     parser.add_argument('--max-checkpoints', type=int, default=5,
