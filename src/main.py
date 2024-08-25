@@ -5,12 +5,17 @@ import os
 import logging
 import multiprocessing
 import torch
+import warnings
 
 from utils.args import get_args
 from utils.logging import config_logging
 from utils.args_to_config import get_config
 
 from torch_configurator import TorchConfigurator
+
+# Our checkpoint includes non tensor data, so we cannot use weights_only=True.
+# This poses a security risk, but we are not concerned about it.
+warnings.filterwarnings("ignore", category=FutureWarning, message=".*weights_only=False.*")
 
 
 def config_wandb(config):
