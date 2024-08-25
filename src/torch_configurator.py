@@ -377,11 +377,17 @@ class TorchConfigurator:
 
     def sync_trainer_state(self):
         """ Sync the trainer state across all ranks """
-        pt_sample_iter_start = torch.tensor(self.trainer.sample_iter_start, dtype=torch.long)
-        pt_sample_iter = torch.tensor(self.trainer.sample_iter, dtype=torch.long)
-        pt_start_iter = torch.tensor(self.trainer.start_iter, dtype=torch.long)
-        pt_iter = torch.tensor(self.trainer.iter, dtype=torch.long)
-        pt_best_val_loss = torch.tensor(self.trainer.best_val_loss, dtype=torch.float)
+        device = self.config.run.device
+        pt_sample_iter_start = \
+            torch.tensor(self.trainer.sample_iter_start, dtype=torch.long).to(device)
+        pt_sample_iter = \
+            torch.tensor(self.trainer.sample_iter, dtype=torch.long).to(device)
+        pt_start_iter = \
+            torch.tensor(self.trainer.start_iter, dtype=torch.long).to(device)
+        pt_iter = \
+            torch.tensor(self.trainer.iter, dtype=torch.long).to(device)
+        pt_best_val_loss = \
+            torch.tensor(self.trainer.best_val_loss, dtype=torch.float).to(device)
 
         torch.distributed.broadcast(pt_sample_iter_start, src=0)
         torch.distributed.broadcast(pt_sample_iter, src=0)
