@@ -25,8 +25,16 @@ class BertMlmModel(torch.nn.Module):
 
     @property
     def base_model(self):
+        """
+        Provides a common interface to access the base model
+        (BERT in this case).
+        """
         return self.bert
 
     @property
     def lm_head(self):
+        """
+        Provides a common interface to access the language model head
+        (masked LM in this case).
+        """
         return self.mask_lm

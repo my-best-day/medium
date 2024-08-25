@@ -16,7 +16,23 @@ class BertClassifierModel(torch.nn.Module):
         self.bert = bert
         self.classifier_model = ClassifierModel(self.bert.d_model, num_labels)
 
-    def forward(self, hiden_states):
-        hiden_states = self.bert(hiden_states)
-        logits = self.classifier_model(hiden_states)
+    def forward(self, hidden_states):
+        hidden_states = self.bert(hidden_states)
+        logits = self.classifier_model(hidden_states)
         return logits
+
+    @property
+    def base_model(self):
+        """
+        Provides a common interface to access the base model
+        (BERT in this case).
+        """
+        return self.bert
+
+    @property
+    def lm_head(self):
+        """
+        Provides a common interface to access the language model head
+        (classifier in this case).
+        """
+        return self.classifier_model
