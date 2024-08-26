@@ -8,6 +8,7 @@ import inspect
 from transformer.task_handler.task_handler_common import TaskHandlerCommon as THC
 from transformer.task_handler.mlm_task_handler import MlmTaskHandler
 from transformer.task_handler.sst2_task_handler import Sst2TaskHandler
+from transformer.task_handler.cola_task_handler import ColaTaskHandler
 
 
 logger = logging.getLogger(__name__)
@@ -106,6 +107,8 @@ class TorchConfigurator:
             task_handler = MlmTaskHandler(self.config, self.tokenizer)
         elif task_type == 'sst2':
             task_handler = Sst2TaskHandler(self.config, self.tokenizer)
+        elif task_type == 'cola':
+            task_handler = ColaTaskHandler(self.config, self.tokenizer)
         else:
             raise ValueError(f"Unknown task type: {task_type}")
 

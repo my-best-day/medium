@@ -95,10 +95,6 @@ class Sst2TaskHandler(TaskHandler):
         logger.info("Resuming from sample %s, iteration %s, with val loss %s",
                     trainer.sample_iter, trainer.iter, trainer.best_val_loss)
 
-        # if config.run.parallel_mode == 'ddp':  NOSONAR
-        #     for param in model.module.parameters():
-        #         torch.distributed.broadcast(param.data, src=0)
-
     def illustrate_predictions(
             self, sentence: torch.tensor, labels: torch.tensor, predicted: torch.tensor):
         """

@@ -29,8 +29,18 @@ adjust warmup iter, and decay-iter to have another bump in the learning rate
 
 
 NEXT:
-- test with CUDA
-- test with DDP
+- add cola
+- add GPT
+- move common code to common
+- unit tests
+
+
+
+
+
++ test continuing from a checkpoint with/out switch-training
++ test with CUDA
++ test with DDP
 
 
 + Need to complete mlm_task_handler, missing:
