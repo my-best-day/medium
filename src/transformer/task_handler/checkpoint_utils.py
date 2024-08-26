@@ -8,7 +8,7 @@ from transformer.trainer import Trainer
 logger = logging.getLogger(__name__)
 
 
-class CheckoutUtils:
+class CheckpointUtils:
 
     @staticmethod
     def gen_checkpoint(config, task_type: str, model: Transformer, optimizer: Optimizer,
