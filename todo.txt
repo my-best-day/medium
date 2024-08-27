@@ -33,6 +33,7 @@ NEXT:
 - add GPT
 - move common code to common
 - unit tests
+- add support for a test split / testing mode
 
 
 
