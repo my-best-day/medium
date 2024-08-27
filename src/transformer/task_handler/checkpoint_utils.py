@@ -25,7 +25,7 @@ class CheckpointUtils:
             'iter': iter,
             'sample_iter': sample_iter,
 
-            'base_model': the_model.bert.state_dict(),
+            'base_model': the_model.base_model.state_dict(),
             'lm_head': the_model.lm_head.state_dict(),
 
             'optimizer': optimizer.state_dict(),
