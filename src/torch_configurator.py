@@ -9,6 +9,7 @@ from transformer.task_handler.task_handler_common import TaskHandlerCommon as TH
 from transformer.task_handler.mlm_task_handler import MlmTaskHandler
 from transformer.task_handler.sst2_task_handler import Sst2TaskHandler
 from transformer.task_handler.cola_task_handler import ColaTaskHandler
+from transformer.task_handler.gpt_task_handler import GptTaskHandler
 
 
 logger = logging.getLogger(__name__)
@@ -109,6 +110,8 @@ class TorchConfigurator:
             task_handler = Sst2TaskHandler(self.config, self.tokenizer)
         elif task_type == 'cola':
             task_handler = ColaTaskHandler(self.config, self.tokenizer)
+        elif task_type == 'gpt':
+            task_handler = GptTaskHandler(self.config, self.model, self.tokenizer)
         else:
             raise ValueError(f"Unknown task type: {task_type}")
 

@@ -13,8 +13,24 @@ class GptModel(torch.nn.Module):
         """
         super().__init__()
         self.gpt = gpt
-        self.lm_head = GenerativeModel(gpt.d_model, vocab_size)
+        self.gen_lm = GenerativeModel(gpt.d_model, vocab_size)
 
     def forward(self, x):
         x = self.gpt(x)
-        return self.lm_head(x)
+        return self.gen_lm(x)
+
+    @property
+    def base_model(self):
+        """
+        Provides a common interface to access the base model
+        (GPT in this case).
+        """
+        return self.gpt
+
+    @property
+    def lm_head(self):
+        """
+        Provides a common interface to access the language model head
+        (Generative in this case).
+        """
+        return self.gen_lm
