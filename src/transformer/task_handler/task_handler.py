@@ -3,6 +3,7 @@ from transformer.transformer import Transformer
 from torch.optim.optimizer import Optimizer
 from transformer.trainer import Trainer
 from torch import tensor
+from torch.nn import Module
 
 
 class TaskHandler:
@@ -31,7 +32,8 @@ class TaskHandler:
         """
         raise NotImplementedError()
 
-    def illustrate_predictions(self, sentence: tensor, labels: tensor, predicted: tensor):
+    def illustrate_predictions(self, model: Module,
+                               sentence: tensor, labels: tensor, predicted: tensor):
         """
         Illustrate the predictions of the model for curiosity and debugging purposes
         """

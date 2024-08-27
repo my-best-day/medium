@@ -1,4 +1,6 @@
 import torch
+from torch import tensor
+from torch.nn import Module
 import logging
 from transformer.task_handler.task_handler import TaskHandler
 from transformer.lm.classifier.bert_classifier_model import BertClassifierModel
@@ -39,8 +41,8 @@ class ColaTaskHandler(TaskHandler):
         CheckpointUtils.resume_from_checkpoint_dict(self.config, self.task_type, model,
                                                     optimizer, trainer, checkpoint)
 
-    def illustrate_predictions(
-            self, sentence: torch.tensor, labels: torch.tensor, predicted: torch.tensor):
+    def illustrate_predictions(self, model: Module,
+                               sentence: tensor, labels: tensor, predicted: tensor):
         """
         Illustrate the predictions of the model for curiosity and debugging purposes
         """
@@ -48,12 +50,12 @@ class ColaTaskHandler(TaskHandler):
         pass
 
     @staticmethod
-    def get_loss(logits: torch.tensor, labels: torch.tensor):
+    def get_loss(logits: tensor, labels: tensor):
         # labels should be [batch_size]
         loss = torch.nn.functional.cross_entropy(logits, labels)
         return loss
 
-    def estimate_accuracy(self, labels: torch.tensor, predicted: torch.tensor):
+    def estimate_accuracy(self, labels: tensor, predicted: tensor):
         """
         Estimate the accuracy of the model on a given task
         """

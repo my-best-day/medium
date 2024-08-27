@@ -1,3 +1,6 @@
+import torch
+from torch import tensor
+from torch.nn import Module
 import logging
 from transformer.task_handler.task_handler import TaskHandler
 from transformer.lm.gpt.gpt_model import GptModel
@@ -7,22 +10,20 @@ from transformer.task_handler.checkpoint_utils import CheckpointUtils
 from transformer.transformer import Transformer
 from torch.optim.optimizer import Optimizer
 from transformer.trainer import Trainer
-import torch
 
 logger = logging.getLogger(__name__)
 
 
 class GptTaskHandler(TaskHandler):
 
-    def __init__(self, config, model, tokenizer):
+    def __init__(self, config, tokenizer):
         self.task_type = 'gpt'
         self.config = config
-        self.model = model
         self.tokenizer = tokenizer
 
-        seq_len = config.model.seq_len
+        seq_len = self.config.model.seq_len
         max_new_tokens = int(0.33 * seq_len)
-        self.dumper = GenerateSentence(self.model, self.tokenizer, seq_len, max_new_tokens)
+        self.dumper = GenerateSentence(self.tokenizer, seq_len, max_new_tokens)
 
     def create_lm_model(self):
         transformer_model = THC.get_transformer_model(self.config, self.tokenizer)
@@ -45,21 +46,21 @@ class GptTaskHandler(TaskHandler):
         CheckpointUtils.resume_from_checkpoint_dict(self.config, self.task_type, model,
                                                     optimizer, trainer, checkpoint)
 
-    def illustrate_predictions(
-            self, sentence: torch.tensor, labels: torch.tensor, predicted: torch.tensor):
+    def illustrate_predictions(self, model: Module,
+                               sentence: tensor, labels: tensor, predicted: tensor):
         """
         Illustrate the predictions of the model for curiosity and debugging purposes
         """
-        text = self.dumper.batched_debug(sentence, labels, predicted)
+        text = self.dumper.batched_debug(model, sentence, labels, predicted)
         logging.info("\n".join(text))
 
     @staticmethod
-    def get_loss(logits: torch.tensor, labels: torch.tensor):
+    def get_loss(logits: tensor, labels: tensor):
         loss_logits = logits.transpose(1, 2)  # Shape: [batch_size, vocab_size, seq_len]
         loss = torch.nn.functional.cross_entropy(loss_logits, labels, ignore_index=0)
         return loss
 
-    def estimate_accuracy(self, labels: torch.tensor, predicted: torch.tensor):
+    def estimate_accuracy(self, labels: tensor, predicted: tensor):
         """
         There is no accuracy for GPT task
         """

@@ -2,15 +2,14 @@ import torch
 
 
 class GenerateSentence:
-    def __init__(self, model, tokenizer, seq_len, max_new_tokens):
+    def __init__(self, tokenizer, seq_len, max_new_tokens):
         assert 0 < max_new_tokens < seq_len, f"max_new_tokens must be between 0 and {seq_len}"
 
-        self.model = model
         self.tokenizer = tokenizer
         self.seq_len = seq_len
         self.max_new_tokens = max_new_tokens
 
-    def batched_debug(self, encoded_prompt, *_):
+    def batched_debug(self, model, encoded_prompt, *_):
         """
         Extends the input prompt with new tokens and returns the generated sentences
 
@@ -18,7 +17,7 @@ class GenerateSentence:
         """
         # only take up to 3 samples from encoded_prompt
         encoded_prompt = encoded_prompt[:3]
-        encoded_response = self.generate(encoded_prompt)
+        encoded_response = self.generate(model, encoded_prompt)
         # convert to human readable format
         # Create responses with a divider between original and generated text
         responses = []
@@ -31,7 +30,7 @@ class GenerateSentence:
 
         return responses
 
-    def generate(self, encoded_prompt):
+    def generate(self, model, encoded_prompt):
         """
         Generate new tokens from a prompt
 
@@ -45,7 +44,7 @@ class GenerateSentence:
             # crop idx to the last block_size tokens
             idx_cond = idx[:, -self.seq_len:]
             # get the predictions
-            logits = self.model(idx_cond)
+            logits = model(idx_cond)
             # focus only on the last time step
             logits = logits[:, -1, :]  # becomes (B, C)
             # apply softmax to get probabilities

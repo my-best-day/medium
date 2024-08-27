@@ -111,7 +111,7 @@ class TorchConfigurator:
         elif task_type == 'cola':
             task_handler = ColaTaskHandler(self.config, self.tokenizer)
         elif task_type == 'gpt':
-            task_handler = GptTaskHandler(self.config, self.model, self.tokenizer)
+            task_handler = GptTaskHandler(self.config, self.tokenizer)
         else:
             raise ValueError(f"Unknown task type: {task_type}")
 

@@ -282,7 +282,7 @@ class Trainer:
             losses.append(loss)
 
             if dump_sentences:
-                self.task_handler.illustrate_predictions(X, Y, logits)
+                self.task_handler.illustrate_predictions(self.model, X, Y, logits)
                 dump_sentences = False
 
             probabilities = torch.softmax(logits, dim=-1)
@@ -298,7 +298,7 @@ class Trainer:
 
         val_loss = sum(losses) / len(losses)
         val_loss = self.sync_up(val_loss)
-        if correct == SKIP_ACCURACY:
+        if total == 0:
             val_accuracy = SKIP_ACCURACY
         else:
             val_accuracy = correct / total

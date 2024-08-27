@@ -1,3 +1,6 @@
+import torch
+from torch import tensor
+from torch.nn import Module
 import logging
 from transformer.task_handler.task_handler import TaskHandler
 from transformer.lm.mlm.bert_mlm_model import BertMlmModel
@@ -7,7 +10,6 @@ from transformer.task_handler.checkpoint_utils import CheckpointUtils
 from transformer.transformer import Transformer
 from torch.optim.optimizer import Optimizer
 from transformer.trainer import Trainer
-import torch
 
 logger = logging.getLogger(__name__)
 
@@ -44,8 +46,8 @@ class MlmTaskHandler(TaskHandler):
         CheckpointUtils.resume_from_checkpoint_dict(self.config, self.task_type, model,
                                                     optimizer, trainer, checkpoint)
 
-    def illustrate_predictions(
-            self, sentence: torch.tensor, labels: torch.tensor, predicted: torch.tensor):
+    def illustrate_predictions(self, model: Module,
+                               sentence: tensor, labels: tensor, predicted: tensor):
         """
         Illustrate the predictions of the model for curiosity and debugging purposes
         """
@@ -53,12 +55,12 @@ class MlmTaskHandler(TaskHandler):
         logger.info("\n".join(text))
 
     @staticmethod
-    def get_loss(logits: torch.tensor, labels: torch.tensor):
+    def get_loss(logits: tensor, labels: tensor):
         loss_logits = logits.transpose(1, 2)  # Shape: [batch_size, vocab_size, seq_len]
         loss = torch.nn.functional.cross_entropy(loss_logits, labels, ignore_index=0)
         return loss
 
-    def estimate_accuracy(self, labels: torch.tensor, predicted: torch.tensor):
+    def estimate_accuracy(self, labels: tensor, predicted: tensor):
         """
         Estimate the accuracy of the model on a given task
         """
