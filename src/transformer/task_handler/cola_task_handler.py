@@ -72,7 +72,7 @@ class ColaTaskHandler(TaskHandler):
         if lm_head.classifier.bias is not None:
             torch.nn.init.zeros_(lm_head.classifier.bias)
 
-    def get_cola_dataset(self, split):
+    def get_dataset(self, epoch, split):
         assert split in ('train', 'val')
         if split == 'train':
             filename = 'in_domain_train.tsv'
