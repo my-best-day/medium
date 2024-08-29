@@ -30,8 +30,8 @@ class TorchConfigurator:
     def __init__(self, config):
         self.config = config
 
-        self.tokenizer = None
         self.task_handler = None
+        self.tokenizer = None
         self.model = None
         self.optimizer = None
         self.trainer = None
@@ -40,8 +40,8 @@ class TorchConfigurator:
         """
         Configure the training process.
         1. figure out what device to use (cpu, cuda)
-        2. create the tokenizer
-        3. create the task handler which abstract the task-specific details
+        2. create the task handler which abstract the task-specific details
+        3. grab the tokenizer from the task handler
         4. create the model, optimizer, and trainer
         5. resume from checkpoint if requested
         6. initialize the model and optimizer (if not loaded from checkpoint)
@@ -49,8 +49,8 @@ class TorchConfigurator:
         """
         self.init_mode_set_device()
 
-        self.tokenizer = self.create_tokenizer()
         self.task_handler = self.create_task_handler()
+        self.tokenizer = self.task_handler.tokenizer
 
         self.create_objects_and_trainer()
         self.resume_from_checkpoint()
@@ -81,37 +81,16 @@ class TorchConfigurator:
             raise ValueError("Unknown parallel mode %s. Valid values are 'single', 'dp', 'ddp'.",
                              parallel_mode)
 
-    def create_tokenizer(self):
-        """
-        Returns the tokenizer for the given case
-
-        TODO: for GPT use GPT2TokenizerFast with its own vocab file. OK to start with BERT
-        tokenizer.
-        """
-        if self.config.run.case == 'movies' or self.config.run.case == 'dickens':
-            from transformers import BertTokenizer
-            path = self.config.run.base_dir / 'vocab/'
-            path = str(path)
-            result = BertTokenizer.from_pretrained(path, local_files_only=True)
-
-        elif self.config.run.case == 'instacart':
-            raise NotImplementedError('InstacartTokenizer not implemented')
-
-        else:
-            raise ValueError('Unknown case. %s', self.config.run.case)
-
-        return result
-
     def create_task_handler(self):
         task_type = self.config.model.task_type
         if task_type == 'mlm':
-            task_handler = MlmTaskHandler(self.config, self.tokenizer)
+            task_handler = MlmTaskHandler(self.config)
         elif task_type == 'sst2':
-            task_handler = Sst2TaskHandler(self.config, self.tokenizer)
+            task_handler = Sst2TaskHandler(self.config)
         elif task_type == 'cola':
-            task_handler = ColaTaskHandler(self.config, self.tokenizer)
+            task_handler = ColaTaskHandler(self.config)
         elif task_type == 'gpt':
-            task_handler = GptTaskHandler(self.config, self.tokenizer)
+            task_handler = GptTaskHandler(self.config)
         else:
             raise ValueError(f"Unknown task type: {task_type}")
 
@@ -152,7 +131,7 @@ class TorchConfigurator:
         from transformer.transformer import Transformer
 
         model_config = self.config.model
-        vocab_size = len(self.tokenizer.vocab)
+        vocab_size = self.tokenizer.vocab_size
 
         transformer_model = Transformer(
             vocab_size=vocab_size,

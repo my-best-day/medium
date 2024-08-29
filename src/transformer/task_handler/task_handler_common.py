@@ -15,7 +15,7 @@ class TaskHandlerCommon:
         from transformer.transformer import Transformer
 
         model_config = config.model
-        vocab_size = len(tokenizer.vocab)
+        vocab_size = tokenizer.vocab_size
 
         transformer_model = Transformer(
             vocab_size=vocab_size,
@@ -91,3 +91,19 @@ class TaskHandlerCommon:
         else:
             raise ValueError(f"Unknown split: {split}")
         return percentage
+
+    @staticmethod
+    def create_bert_tokenizer(config):
+        from transformers import BertTokenizer
+        path = config.run.base_dir / 'vocab/'
+        path = str(path)
+        tokenizer = BertTokenizer.from_pretrained(path, local_files_only=True)
+        return tokenizer
+
+    @staticmethod
+    def create_gpt_tokenizer(config):
+        from transformers import GPT2Tokenizer
+        path = config.run.base_dir / 'gpt_vocab/'
+        path = str(path)
+        tokenizer = GPT2Tokenizer.from_pretrained(path, local_files_only=True)
+        return tokenizer

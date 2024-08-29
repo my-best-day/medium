@@ -16,15 +16,19 @@ logger = logging.getLogger(__name__)
 
 class Sst2TaskHandler(TaskHandler):
 
-    def __init__(self, config, tokenizer):
+    def __init__(self, config):
         self.task_type = 'sst2'
         self.config = config
-        self.tokenizer = tokenizer
+        self.tokenizer = self.create_tokenizer()
+
+    def create_tokenizer(self):
+        tokenizer = THC.get_bert_tokenizer(self.config)
+        return tokenizer
 
     def create_lm_model(self):
-        transformer_model = THC.get_transformer_model(self.config, self.tokenizer)
+        transformer_model = THC.create_transformer_model(self.config, self.tokenizer)
 
-        vocab_size = len(self.tokenizer.vocab)
+        vocab_size = self.tokenizer.vocab_size
         result = BertClassifierModel(transformer_model, vocab_size)
 
         return result

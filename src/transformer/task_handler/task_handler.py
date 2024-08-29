@@ -9,6 +9,13 @@ from torch.nn import Module
 class TaskHandler:
 
     @abstractmethod
+    def create_tokenizer(self):
+        """
+        Create a tokenizer for the task
+        """
+        raise NotImplementedError()
+
+    @abstractmethod
     def create_lm_model(self):
         """
         Returns a model composed of the base transformer model and a language model head

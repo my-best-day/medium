@@ -16,12 +16,16 @@ logger = logging.getLogger(__name__)
 
 class MlmTaskHandler(TaskHandler):
 
-    def __init__(self, config, tokenizer):
+    def __init__(self, config):
         self.task_type = 'mlm'
         self.config = config
-        self.tokenizer = tokenizer
+        self.tokenizer = self.create_tokenizer()
 
-        self.dumper = DumpSentences(tokenizer)
+        self.dumper = DumpSentences(self.tokenizer)
+
+    def create_tokenizer(self):
+        tokenizer = THC.create_bert_tokenizer(self.config)
+        return tokenizer
 
     def create_lm_model(self):
         """
@@ -29,7 +33,7 @@ class MlmTaskHandler(TaskHandler):
         """
         transformer_model = THC.get_transformer_model(self.config, self.tokenizer)
 
-        vocab_size = len(self.tokenizer.vocab)
+        vocab_size = self.tokenizer.vocab_size
         result = BertMlmModel(transformer_model, vocab_size, apply_softmax=False)
 
         return result

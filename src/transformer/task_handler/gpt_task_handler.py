@@ -16,19 +16,23 @@ logger = logging.getLogger(__name__)
 
 class GptTaskHandler(TaskHandler):
 
-    def __init__(self, config, tokenizer):
+    def __init__(self, config):
         self.task_type = 'gpt'
         self.config = config
-        self.tokenizer = tokenizer
+        self.tokenizer = self.create_tokenizer()
 
         seq_len = self.config.model.seq_len
         max_new_tokens = int(0.33 * seq_len)
         self.dumper = GenerateSentence(self.tokenizer, seq_len, max_new_tokens)
 
+    def create_tokenizer(self):
+        tokenizer = THC.create_gpt_tokenizer(self.config)
+        return tokenizer
+
     def create_lm_model(self):
         transformer_model = THC.get_transformer_model(self.config, self.tokenizer)
 
-        vocab_size = len(self.tokenizer.vocab)
+        vocab_size = self.tokenizer.vocab_size
         result = GptModel(transformer_model, vocab_size)
 
         return result

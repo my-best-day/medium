@@ -3,10 +3,10 @@ Convert a text file to token ids which can later be used to create a dataset for
 pre-training a BERT model.
 
 This conversion takes time and is identical when we create multiple datasets.
-This tool lets us do the text to token-ids convertion once and then reuse it
+This tool lets us do the text to token-ids conversion once and then reuse it
 for multiple datasets.
 
-We optionally parallelize the tokanization which further saves time. We work on
+We optionally parallelize the tokenization which further saves time. We work on
 chunks of the text to avoid memory issues.
 
 The next step of the process is to create the pre-cached dataset which is done
@@ -16,7 +16,6 @@ import re
 import gzip
 import argparse
 import joblib
-from transformers import BertTokenizer
 from utils.timer import Timer
 import msgpack
 import itertools
@@ -40,7 +39,7 @@ def chop_trailing_sub_word(text):
 
 def find_last_complete_word_position(text):
     """
-    Search from the end backword for the fisrt white space character the precedes
+    Search from the end backward for the first white space character the precedes
     non-white space characters. This is the last (sub)word.
     """
     match = re.search(r'\s+[^\s]$', text)
@@ -51,9 +50,9 @@ def find_last_complete_word_position(text):
     return last_white_char
 
 
-def tokenize(vocab, text):
+def tokenize(which, vocab, text):
     """convert text to token ids. helps when we parallelize the tokenization"""
-    tokenizer = BertTokenizer.from_pretrained(vocab, local_files_only=True)
+    tokenizer = create_tokenizer(which, vocab)
     tokens = tokenizer.encode(text, add_special_tokens=False)
     return tokens
 
@@ -100,16 +99,17 @@ def tokenize_file(args):
                 text, remainder_chars = chop_trailing_sub_word(text)
                 logger.debug(steps_timer.step("chop trailing", True))
 
-                # tokenize the text, pralllelize if nproc is greater than 1
+                # tokenize the text, parallelize if nproc is greater than 1
                 if args.nproc > 1:
                     with joblib.parallel_backend('loky', n_jobs=args.nproc):
                         text_chunks = divide_text(text, args.nproc)
                         tokens_list = joblib.Parallel()(
-                            joblib.delayed(tokenize)(args.vocab, chunk) for chunk in text_chunks
+                            joblib.delayed(tokenize)(args.tokenizer, args.vocab, chunk) for
+                            chunk in text_chunks
                         )
                         tokens = list(itertools.chain.from_iterable(tokens_list))
                 else:
-                    tokens = tokenize(args.vocab, text)
+                    tokens = tokenize(args.tokenizer, args.vocab, text)
                 logger.debug(steps_timer.step("tokenize", True))
 
                 # write the samples to the output file
@@ -153,6 +153,8 @@ def get_arguments():
     parser.add_argument("-i", "--input", type=str, help="The input file.")
     parser.add_argument("-o", "--output", type=str, help="The output file.")
     parser.add_argument("-v", "--vocab", type=str, help="The dir containing the vocab files.")
+    parser.add_argument("-t", "--tokenizer", type=str, choices=['bert', 'gpt'],
+                        help="The tokenizer to use.")
     parser.add_argument("-c", "--chunk-size", type=int, default=20, help="The chunk size in MB.")
     parser.add_argument("-n", "--nproc", type=int, default=1, help="The number of processes.")
     parser.add_argument("--clean-spaces", type=int, choices=[0, 1], default=-1,
@@ -160,6 +162,20 @@ def get_arguments():
 
     args = parser.parse_args()
     return args
+
+
+def create_tokenizer(which, path):
+    path = str(path)
+    if which == 'bert':
+        from transformers import BertTokenizer
+        tokenizer = BertTokenizer.from_pretrained(path, local_files_only=True)
+    elif which == 'gpt':
+        from transformers import GPT2Tokenizer
+        tokenizer = GPT2Tokenizer.from_pretrained(path, local_files_only=True)
+    else:
+        raise ValueError(f"Unknown tokenizer type: {which}")
+
+    return tokenizer
 
 
 def post_process_args(args, tokenizer):
@@ -186,7 +202,7 @@ def check_should_clean_spaces(tokenizer):
 
 def _main():
     args = get_arguments()
-    tokenizer = BertTokenizer.from_pretrained(args.vocab, local_files_only=True)
+    tokenizer = create_tokenizer(args.tokenizer, args.vocab)
     post_process_args(args, tokenizer)
     tokenize_file(args)
 
