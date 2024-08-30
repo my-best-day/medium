@@ -82,11 +82,13 @@ class ColaTaskHandler(TaskHandler):
             torch.nn.init.zeros_(lm_head.classifier.bias)
 
     def get_dataset(self, epoch, split):
-        assert split in ('train', 'val')
+        assert split in ('train', 'val', 'test')
         if split == 'train':
             filename = 'in_domain_train.tsv'
         elif split == 'val':
             filename = 'in_domain_dev.tsv'
+        elif split == 'test':
+            filename = 'out_of_domain_dev.tsv'
         path = self.config.run.datasets_dir / filename
         dataset = ColaDataset(path, self.tokenizer, self.config.model.seq_len)
         return dataset

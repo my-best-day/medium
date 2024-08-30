@@ -29,6 +29,20 @@ adjust warmup iter, and decay-iter to have another bump in the learning rate
 
 
 NEXT:
+
+* for train, val, and test loss - sync up (across ranks) the total loss and total number of batches
+  and the average loss is the ratio of the synced-up/accumulated loss / synced-up accumulated count
+
+* ditto for accuracy
+
+for MLM accuracy, we could have counted the total global number of masked tokens and the global 
+total count of accurate tokens ... again, for now, I'll file it under not interesting 
+
+* instead of counting batches, count samples - items inside the batch and use that as a weight for
+  the loss of each batch. actually, we are not going to do so, we might put a small comment saying
+  we don't do that because the vast majority of our batches are complete and the number that are not
+  is negligible
+
 - add cola
 - add GPT
 - move common code to common

@@ -20,8 +20,7 @@ class Trainer:
 
         self.configure_precision()
 
-        self.train_loader_iter = None
-        self.val_loader_iter = None
+        self.loader_iter_map: dict[str, iter] = {}
 
         self.dataset_counters = {'train': 0, 'val': 0}
 
@@ -38,7 +37,7 @@ class Trainer:
 
         self.micro_step_count = 1
         self.grad_clip = 1.0
-        self.val_iters = 10
+        self.val_iters = self.config.train.val_iters
         self.best_val_loss = float('inf')
 
     def configure_precision(self):
@@ -68,7 +67,7 @@ class Trainer:
     def train(self):
         timer = Timer()
         losses = []
-        X, Y = self.get_batch('train')
+        X, Y = self.get_batch('train', True)
         while self.should_continue_training():
             lr = self.adjust_lr()
             if self.should_estimate_loss():
@@ -79,7 +78,7 @@ class Trainer:
             accumulated_loss = 0.0
             for micro_step in range(self.micro_step_count):
                 logits, loss = self.training_forward_and_loss(micro_step, X, Y)  # NOSONAR
-                X, Y = self.get_batch('train')
+                X, Y = self.get_batch('train', True)
                 loss /= self.micro_step_count
                 accumulated_loss += loss
                 self.backward(loss)
@@ -91,44 +90,52 @@ class Trainer:
             self.optimizer.zero_grad()
             self.iter += 1
 
-    # @torch.no_grad()
-    # def test(self):
-    #     """
-    #     Run the model on the test set and log the loss and accuracy.
-    #     """
-    #     losses = []
-    #     total = 0
-    #     correct = 0
+    @torch.no_grad()
+    def test(self):
+        """
+        Run the model on the test set and log the loss and accuracy.
+        """
+        losses = []
+        total = 0
+        correct = 0
 
-    #     self.model.eval()
+        max_iters = self.config.train.test_iters
 
-    #     iters = 0
-    #     while True:
-    #         X, Y = self.get_batch('test')
-    #         logits, loss = self.forward_and_loss(X, Y)
-    #         losses.append(loss)
+        self.model.eval()
+        try:
+            iters = 0
+            while True:
+                X, Y = self.get_batch('test', False)
+                if X is None or Y is None:
+                    break
 
-    #         sample_total, sample_correct = self.task_handler.estimate_accuracy(Y, logits)
-    #         if sample_total is not None:
-    #             total += sample_total
-    #         if sample_correct is not None:
-    #             correct += sample_correct
+                logits, loss = self.forward_and_loss(X, Y)
+                losses.append(loss)
 
-    #         iters += 1
-    #         if iters >= self.test_iters:
-    #             break
+                sample_total, sample_correct = self.task_handler.estimate_accuracy(Y, logits)
+                total += sample_total if sample_total is not None else 0
+                correct += sample_correct if sample_correct is not None else 0
 
-    #     self.model.train()
+                if iters % 100 == 0:
+                    logger.info("Test iteration %s, loss: %s, accuracy: %s",
+                                iters, loss, correct / total if total > 0 else 0)
 
-    #     loss = sum(losses) / len(losses)
-    #     loss = self.sync_up(loss)
-    #     if total == 0:
-    #         accuracy = SKIP_ACCURACY
-    #     else:
-    #         accuracy = correct / total
-    #         accuracy = self.sync_up(accuracy)
+                # todo, stop on split exhaustion
+                iters += 1
+                if max_iters is not None and iters >= max_iters:
+                    break
+        finally:
+            self.model.train()
 
-    #     logger.info(f"Test loss: {loss:.2f}, accuracy: {accuracy:.2%}")
+        loss = self.average_synced_up_loss
+        loss = sum(losses) / len(losses)
+        loss = self.sync_up(loss)
+        if total == 0:
+            accuracy = SKIP_ACCURACY
+        else:
+            accuracy = self.ratio_synced_up_values(correct, total)
+
+        logger.info(f"Test loss: {loss:.2f}, accuracy: {accuracy:.2%}")
 
     def should_continue_training(self):
         if Path('./stop').exists() or Path('./stop_now').exists():
@@ -324,7 +331,7 @@ class Trainer:
         try:
             dump_sentences = True
             for _ in range(self.val_iters):
-                X, Y = self.get_batch('val')
+                X, Y = self.get_batch('val', True)
                 logits, loss = self.forward_and_loss(X, Y)
                 losses.append(loss)
 
@@ -333,7 +340,6 @@ class Trainer:
                     dump_sentences = False
 
                 sample_total, sample_correct = self.task_handler.estimate_accuracy(Y, logits)
-
                 total += sample_total if sample_total is not None else 0
                 correct += sample_correct if sample_correct is not None else 0
         finally:
@@ -388,16 +394,23 @@ class Trainer:
             self._writer = SummaryWriter(str(self.config.run.logs_dir))
         return self._writer
 
-    def get_batch(self, split):
-        if split == 'train':
-            iterator = self.train_loader_iter
-        elif split == 'val':
-            iterator = self.val_loader_iter
-        else:
-            raise ValueError(f"Unknown split: {split}")
+    def get_batch(self, split, allow_reset):
+        """
+        Retrieves the next batch of data from the specified split (train, val, test).
 
+        Args:
+            split (str): The data split to retrieve the batch from ('train' or 'val', 'test').
+            allow_reset (bool): If True, resets the iterator and starts a new epoch
+                                when the current iterator is exhausted.
+                                If False, returns (None, None) when the iterator is exhausted.
+
+        Returns:
+            tuple: A tuple (X, Y) containing the input data and corresponding labels,
+                or (None, None) if the iterator is exhausted and `allow_reset` is False.
+        """
+        iterator = self.loader_iter_map.get(split, None)
         if iterator is None:
-            iterator = self.get_data_iter(split)
+            iterator = self.gen_data_iter(split)
 
         try:
             X, Y = next(iterator)
@@ -407,31 +420,24 @@ class Trainer:
         except StopIteration:
             # Handle the case when the iterator is exhausted
             # For example, you can reset the iterator or raise an exception
-            if split == 'train':
-                self.train_loader_iter = None
-            elif split == 'val':
-                self.val_loader_iter = None
+            if allow_reset:
+                self.loader_iter_map[split] = None
+                return self.get_batch(split, allow_reset)
             else:
-                raise ValueError(f"Unknown split: {split}")
-            return self.get_batch(split)
+                return None, None
 
-    def get_data_iter(self, split):
+    def gen_data_iter(self, split):
         data_loader = self.get_data_loader(split)
         data_iter = iter(data_loader)
-        if split == 'train':
-            self.train_loader_iter = data_iter
-        elif split == 'val':
-            self.val_loader_iter = data_iter
-        else:
-            raise ValueError(f"Unknown split: {split}")
+        self.loader_iter_map[split] = data_iter
         return data_iter
 
     def get_data_loader(self, split):
         from torch.utils.data import DataLoader
         from torch.utils.data.distributed import DistributedSampler
 
-        epoch = self.dataset_counters[split]
-        self.dataset_counters[split] += 1
+        epoch = self.dataset_counters.get(split, 0)
+        self.dataset_counters[split] = epoch + 1
 
         dataset = self.get_dataset(epoch, split)
         batch_size = self.config.train.batch_size

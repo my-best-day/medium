@@ -38,6 +38,7 @@ class TrainConfig(BaseConfig):
     val_interval: int
     dataset_pattern: str
     val_dataset_pattern: str
+    test_dataset_pattern: str
     weight_decay: float
     dataset_percentage: float
     val_dataset_percentage: float
@@ -48,6 +49,9 @@ class TrainConfig(BaseConfig):
     lr_decay_iters: int
     max_iters: int
 
+    val_iters: int
+    test_iters: int
+
     dropout: Optional[float] = None
     checkpoint: Optional[Path] = None
 
@@ -56,6 +60,7 @@ class TrainConfig(BaseConfig):
     # remains the same, set this flag to start a new training phase (e.g., switching from
     # pre-training to fine-tuning or adjusting the training setup like learning rate schedule).
     switch_training: bool = False
+    test: bool = False
 
     max_checkpoints: Optional[int] = None
     lr_scheduler: Optional[str] = None

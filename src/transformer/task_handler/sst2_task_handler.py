@@ -82,11 +82,13 @@ class Sst2TaskHandler(TaskHandler):
             torch.nn.init.zeros_(lm_head.classifier.bias)
 
     def get_dataset(self, epoch, split):
-        assert split in ('train', 'val')
+        assert split in ('train', 'val', 'test')
         if split == 'train':
             prefix = 'train'
         elif split == 'val':
             prefix = 'validation'
+        elif split == 'test':
+            prefix = 'test'
 
         filename = f'{prefix}-00000-of-00001.parquet'
         path = self.config.run.datasets_dir / filename

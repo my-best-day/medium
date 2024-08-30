@@ -106,6 +106,7 @@ def add_train_arguments(parser: configargparse.ArgumentParser):
                         'or modify the training setup).')
     parser.add_argument('--dataset-pattern', type=str, default=None, help='Dataset pattern')
     parser.add_argument('--val-dataset-pattern', type=str, default=None, help='Validation pattern')
+    parser.add_argument('--test-dataset-pattern', type=str, default=None, help='Test pattern')
     parser.add_argument('--max-checkpoints', type=int, default=5,
                         help='Maximum number of checkpoints to keep.')
 
@@ -116,9 +117,14 @@ def add_train_arguments(parser: configargparse.ArgumentParser):
     parser.add_argument('--lr-decay-iters', type=int, default=None,
                         help='Learning rate decay iterations')
     parser.add_argument('--max-iters', type=int, default=None, help='Maximum iterations')
+    parser.add_argument('--val-iters', type=int, default=None, help='Validation iterations')
+    parser.add_argument('--test-iters', type=int, default=None,
+                        help='Test iterations, None for all')
 
     parser.add_argument('--lr-scheduler', type=str, default=None, help='Learning rate scheduler')
     parser.add_argument('--weight-decay', type=float, default=0.0, help='Weight decay')
+
+    parser.add_argument('--test', action='store_true', default=False, help='Test the model')
 
     parser.add_argument('--dataset-percentage', type=float, default=1.0,
                         help='Percentage of dataset to use')

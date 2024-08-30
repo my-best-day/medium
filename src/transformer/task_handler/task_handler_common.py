@@ -67,6 +67,8 @@ class TaskHandlerCommon:
             pattern = config.train.dataset_pattern
         elif split == 'val':
             pattern = config.train.val_dataset_pattern
+        elif split == 'test':
+            pattern = config.train.test_dataset_pattern
         else:
             raise ValueError(f"Unknown split: {split}")
 
@@ -84,12 +86,7 @@ class TaskHandlerCommon:
 
     @staticmethod
     def get_percentage(config, split):
-        if split == 'train':
-            percentage = config.train.dataset_percentage
-        elif split == 'val':
-            percentage = config.train.val_dataset_percentage
-        else:
-            raise ValueError(f"Unknown split: {split}")
+        percentage = config.train.dataset_percentage
         return percentage
 
     @staticmethod

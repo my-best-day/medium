@@ -32,7 +32,10 @@ def run(config):
     configurator = TorchConfigurator(config)
     configurator.configure()
     trainer = configurator.trainer
-    trainer.train()
+    if config.train.test:
+        trainer.test()
+    else:
+        trainer.train()
 
 
 def run_ddp(config, world_size):
