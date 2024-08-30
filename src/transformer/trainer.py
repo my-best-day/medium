@@ -127,9 +127,7 @@ class Trainer:
         finally:
             self.model.train()
 
-        loss = self.average_synced_up_loss
-        loss = sum(losses) / len(losses)
-        loss = self.sync_up(loss)
+        loss = self.average_synced_up_loss(losses)
         if total == 0:
             accuracy = SKIP_ACCURACY
         else:
