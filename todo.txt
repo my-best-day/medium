@@ -35,8 +35,8 @@ NEXT:
 
 * ditto for accuracy
 
-for MLM accuracy, we could have counted the total global number of masked tokens and the global 
-total count of accurate tokens ... again, for now, I'll file it under not interesting 
+for MLM accuracy, we could have counted the total global number of masked tokens and the global
+total count of accurate tokens ... again, for now, I'll file it under not interesting
 
 * instead of counting batches, count samples - items inside the batch and use that as a weight for
   the loss of each batch. actually, we are not going to do so, we might put a small comment saying
