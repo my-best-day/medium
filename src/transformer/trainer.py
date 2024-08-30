@@ -22,7 +22,7 @@ class Trainer:
 
         self.loader_iter_map: dict[str, iter] = {}
 
-        self.dataset_counters = {'train': 0, 'val': 0}
+        self.dataset_counters = {}
 
         # todo: take from config
         self.start_iter = 0
@@ -71,7 +71,7 @@ class Trainer:
         timer = Timer()
         losses = []
         X, Y = self.get_batch('train', True)
-        while self.should_continue_training():
+        while self.should_continue_looping(self.config.train.max_iters, self):
             lr = self.adjust_lr()
             if self.should_estimate_loss():
                 elapsed = timer.elapsed(restart=False)
@@ -99,14 +99,17 @@ class Trainer:
         Run the model on the test set and log the loss and accuracy.
         """
         loss, accuracy = self.estimate_loss('test', False)
-        logger.info(f"Test loss: {loss:.2f}, accuracy: {accuracy:.2%}")
+        accuracy = 0 if accuracy == SKIP_ACCURACY else accuracy
+        logger.info(f"Test loss: {loss:5.2f}, accuracy: {accuracy:4.3%}")
 
-    def should_continue_training(self):
+    def should_continue_looping(self, max_iters: int, iter: int) -> bool:
         if Path('./stop').exists() or Path('./stop_now').exists():
             logger.info("Stopping training because file './stop' or './stop_now' exists.")
             result = False
+        elif max_iters is not None:
+            result = iter < max_iters
         else:
-            result = self.iter < self.config.train.max_iters
+            result = True
         return result
 
     def should_estimate_loss(self):
@@ -278,10 +281,10 @@ class Trainer:
     @torch.no_grad()
     def estimate_loss(self, split, illustrate) -> tuple[float, float]:
         """
-        Estimate the validation loss, and accuracy by running the model on the validation set.
+        Estimate the validation/test loss, and accuracy by running the model on the validation/test set.
 
         Returns:
-            val_loss: The estimated validation loss
+            val_loss: The estimated validation/test loss
             val_accuracy: The estimated validation accuracy if applicable, otherwise SKIP_ACCURACY
         """
         # consider averaging the losses by sample count rather than by iteration to
@@ -297,8 +300,8 @@ class Trainer:
         try:
             should_illustrate = illustrate
             iters = 0
-            while True:
-                X, Y = self.get_batch('val', True)
+            while self.should_continue_looping(max_iters, iters):
+                X, Y = self.get_batch(split, True)
                 if X is None or Y is None:
                     break
 
@@ -313,11 +316,10 @@ class Trainer:
                 total += sample_total
                 correct += sample_correct
 
-                self.log_estimate_progress(split, iters, loss, correct, total)
+                self.log_estimate_progress(split, iters, loss.item(), correct, total)
 
                 iters += 1
-                if max_iters is not None and iters <= max_iters:
-                    break
+
         finally:
             self.model.train()
 
@@ -329,8 +331,8 @@ class Trainer:
         return loss, accuracy
 
     def log_estimate_progress(self, split, iters, loss, correct, total):
-        if iters % 100 == 0:
-            logger.info("%s iteration %s, loss: %s, accuracy: %s",
+        if self.config.run.is_primary and (iters % 100 == 0):
+            logger.info("%s iteration: %s, loss: %5.2f, accuracy: %4.3f",
                         split, iters, loss, correct / total if total > 0 else 0)
 
     def average_synced_up_loss(self, losses):

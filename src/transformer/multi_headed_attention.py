@@ -21,7 +21,6 @@ class MultiHeadedAttention(torch.nn.Module):
         self.is_causal = is_gpt
         self.causal = is_gpt
         self.flash = use_flash and hasattr(torch.nn.functional, 'scaled_dot_product_attention')
-        logging.info(f'Using flash: {self.flash}')
 
         self.query = torch.nn.Linear(d_model, d_model)
         self.key = torch.nn.Linear(d_model, d_model)
