@@ -360,7 +360,7 @@ class TorchConfigurator:
             self.trainer.sample_iter_start,
             self.trainer.sample_iter,
             self.trainer.start_iter,
-            self.trainer.iter,
+            self.trainer.iters,
             self.trainer.best_val_loss
         ]
 
@@ -376,5 +376,5 @@ class TorchConfigurator:
         self.trainer.sample_iter_start = trainer_state[0]
         self.trainer.sample_iter = trainer_state[1]
         self.trainer.start_iter = trainer_state[2]
-        self.trainer.iter = trainer_state[3]
+        self.trainer.iters = trainer_state[3]
         self.trainer.best_val_loss = trainer_state[4]

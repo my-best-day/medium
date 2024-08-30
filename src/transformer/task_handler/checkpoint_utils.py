@@ -71,10 +71,10 @@ class CheckpointUtils:
                 trainer.sample_iter = checkpoint['sample_iter']
             trainer.sample_iter_start = trainer.sample_iter
             trainer.start_iter = checkpoint['iter']
-            trainer.iter = trainer.start_iter
+            trainer.iters = trainer.start_iter
 
             trainer.best_val_loss = checkpoint['val_loss']
 
         # log sample count, iteration, and best validation loss
         logger.info("Resuming from sample %s, iteration %s, with val loss %s",
-                    trainer.sample_iter, trainer.iter, trainer.best_val_loss)
+                    trainer.sample_iter, trainer.iters, trainer.best_val_loss)

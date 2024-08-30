@@ -26,7 +26,7 @@ class Trainer:
 
         # todo: take from config
         self.start_iter = 0
-        self.iter = self.start_iter
+        self.iters = self.start_iter
 
         # switching from iter to sample count
         self.sample_iter = 0
@@ -71,7 +71,7 @@ class Trainer:
         timer = Timer()
         losses = []
         X, Y = self.get_batch('train', True)
-        while self.should_continue_looping(self.config.train.max_iters, self):
+        while self.should_continue_looping(self.config.train.max_iters, self.iters):
             lr = self.adjust_lr()
             if self.should_estimate_loss():
                 elapsed = timer.elapsed(restart=False)
@@ -91,7 +91,7 @@ class Trainer:
             losses.append(accumulated_loss)
             self.step()
             self.optimizer.zero_grad()
-            self.iter += 1
+            self.iters += 1
 
     @torch.no_grad()
     def test(self):
@@ -102,23 +102,23 @@ class Trainer:
         accuracy = 0 if accuracy == SKIP_ACCURACY else accuracy
         logger.info(f"Test loss: {loss:5.2f}, accuracy: {accuracy:4.3%}")
 
-    def should_continue_looping(self, max_iters: int, iter: int) -> bool:
+    def should_continue_looping(self, max_iters: int, iters: int) -> bool:
         if Path('./stop').exists() or Path('./stop_now').exists():
             logger.info("Stopping training because file './stop' or './stop_now' exists.")
             result = False
         elif max_iters is not None:
-            result = iter < max_iters
+            result = iters < max_iters
         else:
             result = True
         return result
 
     def should_estimate_loss(self):
-        iters = self.iter - self.start_iter
+        iters = self.iters - self.start_iter
         result = iters % self.config.train.val_interval == 0
         return result
 
     def adjust_lr(self):
-        lr = self.get_lr(self.iter)
+        lr = self.get_lr(self.iters)
         for param_group in self.optimizer.param_groups:
             param_group['lr'] = lr
         return lr
@@ -197,14 +197,14 @@ class Trainer:
         if self.config.run.is_primary:
             self.log_progress(elapsed, train_loss, val_loss, val_accuracy, lr)
 
-            if val_loss < self.best_val_loss and self.iter > self.config.train.val_interval:
+            if val_loss < self.best_val_loss and self.iters > self.config.train.val_interval:
                 self.best_val_loss = val_loss
-                self.save_checkpoint(self.iter, val_loss)
+                self.save_checkpoint(self.iters, val_loss)
 
     def should_save_checkpoint(self, val_loss):
         if val_loss >= self.best_val_loss:
             return False
-        iters = self.iter - self.start_iter
+        iters = self.iters - self.start_iter
         if iters < self.split_iters.get['val']:
             return False
         return True
@@ -216,12 +216,12 @@ class Trainer:
             self.log_wandb(train_loss, val_loss, val_accuracy, lr)
 
         num_digits = len(f'{self.config.train.max_iters:,}')
-        per_iteration = (elapsed / self.iter) if self.iter > 0 else 0.5
-        remaining = per_iteration * (self.config.train.max_iters - self.iter)
+        per_iteration = (elapsed / self.iters) if self.iters > 0 else 0.5
+        remaining = per_iteration * (self.config.train.max_iters - self.iters)
         loss_str = 'None ' if train_loss is None else f'{train_loss:5.2f}'
         items = [
-            f'{self.iter / self.config.train.max_iters:4.0%}',
-            f'{self.iter:>{num_digits},}/{self.config.train.max_iters:,}',
+            f'{self.iters / self.config.train.max_iters:4.0%}',
+            f'{self.iters:>{num_digits},}/{self.config.train.max_iters:,}',
             f'e: {time.strftime("%H:%M:%S", time.gmtime(elapsed))}',
             f'r: {time.strftime("%H:%M:%S", time.gmtime(remaining))}',
             f'{time.strftime("%M:%S", time.gmtime(per_iteration * 1000.0))} /Kit',
@@ -238,11 +238,11 @@ class Trainer:
 
     def log_tensorboard(self, train_loss, val_loss, val_accuracy, lr):
         if train_loss is not None:
-            self.writer.add_scalar('train_loss', train_loss, self.iter)
-        self.writer.add_scalar('val_loss', val_loss, self.iter)
+            self.writer.add_scalar('train_loss', train_loss, self.iters)
+        self.writer.add_scalar('val_loss', val_loss, self.iters)
         if val_accuracy != SKIP_ACCURACY:
-            self.writer.add_scalar('val_accuracy', val_accuracy, self.iter)
-        self.writer.add_scalar('lr', lr, self.iter)
+            self.writer.add_scalar('val_accuracy', val_accuracy, self.iters)
+        self.writer.add_scalar('lr', lr, self.iters)
 
     def log_wandb(self, train_loss, val_loss, val_accuracy, lr):
         import wandb
@@ -251,7 +251,7 @@ class Trainer:
             'val_loss': val_loss,
             'val_accuracy': val_accuracy,
             'lr': lr},
-            step=self.iter
+            step=self.iters
         )
 
     def save_checkpoint(self, iter: int, val_loss: float):
