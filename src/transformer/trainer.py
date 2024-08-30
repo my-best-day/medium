@@ -18,6 +18,30 @@ class Trainer:
         self.optimizer = optimizer
         self.task_handler = task_handler
 
+        self.configure_precision()
+
+        self.train_loader_iter = None
+        self.val_loader_iter = None
+
+        self.dataset_counters = {'train': 0, 'val': 0}
+
+        # todo: take from config
+        self.start_iter = 0
+        self.iter = self.start_iter
+
+        # switching from iter to sample count
+        self.sample_iter = 0
+        self.sample_iter_start = self.sample_iter
+
+        is_ddp = self.config.run.parallel_mode == 'ddp'
+        self.world_size = torch.distributed.get_world_size() if is_ddp else 1
+
+        self.micro_step_count = 1
+        self.grad_clip = 1.0
+        self.val_iters = 10
+        self.best_val_loss = float('inf')
+
+    def configure_precision(self):
         # 'float32', 'bfloat16', or 'float16', the latter will auto implement a GradScaler
         dtype = 'bfloat16' if torch.cuda.is_available() and torch.cuda.is_bf16_supported() else \
             'float16'
@@ -40,27 +64,6 @@ class Trainer:
         }[dtype]
         self.autocast_ctx = nullcontext() if device_type == 'cpu' else \
             torch.amp.autocast(device_type=device_type, dtype=pt_dtype)
-
-        self.train_loader_iter = None
-        self.val_loader_iter = None
-
-        self.dataset_counters = {'train': 0, 'val': 0}
-
-        # todo: take from config
-        self.start_iter = 0
-        self.iter = self.start_iter
-
-        # switching from iter to sample count
-        self.sample_iter = 0
-        self.sample_iter_start = self.sample_iter
-
-        is_ddp = self.config.run.parallel_mode == 'ddp'
-        self.world_size = torch.distributed.get_world_size() if is_ddp else 1
-
-        self.micro_step_count = 1
-        self.grad_clip = 1.0
-        self.val_iters = 10
-        self.best_val_loss = float('inf')
 
     def train(self):
         timer = Timer()
@@ -87,6 +90,20 @@ class Trainer:
             self.step()
             self.optimizer.zero_grad()
             self.iter += 1
+
+    # @torch.no_grad()
+    # def test(self):
+    #     losses = []
+    #     total = 0
+    #     correct = 0
+
+    #     self.model.eval()
+
+    #     iter = 0
+    #     while True:
+    #         X, Y = self.get_batch('test')
+    #         logits, loss = self.forward_and_loss(X, Y)
+    #         losses.append(loss)
 
     def should_continue_training(self):
         if Path('./stop').exists() or Path('./stop_now').exists():
@@ -285,10 +302,7 @@ class Trainer:
                 self.task_handler.illustrate_predictions(self.model, X, Y, logits)
                 dump_sentences = False
 
-            probabilities = torch.softmax(logits, dim=-1)
-            _, predicted = torch.max(probabilities, dim=-1)
-
-            sample_total, sample_correct = self.task_handler.estimate_accuracy(Y, predicted)
+            sample_total, sample_correct = self.task_handler.estimate_accuracy(Y, logits)
             if sample_total is not None:
                 total += sample_total
             if sample_correct is not None:

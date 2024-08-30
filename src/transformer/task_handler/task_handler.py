@@ -54,7 +54,7 @@ class TaskHandler:
         raise NotImplementedError()
 
     @abstractmethod
-    def estimate_accuracy(self, labels: tensor, predicted: tensor):
+    def estimate_accuracy(self, labels: tensor, logits: tensor):
         """
         Estimate the accuracy of the model on a given task
         """

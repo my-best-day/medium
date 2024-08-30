@@ -64,10 +64,13 @@ class MlmTaskHandler(TaskHandler):
         loss = torch.nn.functional.cross_entropy(loss_logits, labels, ignore_index=0)
         return loss
 
-    def estimate_accuracy(self, labels: tensor, predicted: tensor):
+    def estimate_accuracy(self, labels: tensor, logits: tensor):
         """
         Estimate the accuracy of the model on a given task
         """
+        probabilities = torch.softmax(logits, dim=-1)
+        _, predicted = torch.max(probabilities, dim=-1)
+
         # mask: ignore padding (assumed 0) and focus on masked tokens (assumed non zero)
         flat_labels = labels.flatten()
         flat_predicted = predicted.flatten()

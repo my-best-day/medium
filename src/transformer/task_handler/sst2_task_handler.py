@@ -59,10 +59,13 @@ class Sst2TaskHandler(TaskHandler):
         loss = torch.nn.functional.cross_entropy(logits, labels)
         return loss
 
-    def estimate_accuracy(self, labels: tensor, predicted: tensor):
+    def estimate_accuracy(self, labels: tensor, logits: tensor):
         """
         Estimate the accuracy of the model on a given task
         """
+        probabilities = torch.softmax(logits, dim=-1)
+        _, predicted = torch.max(probabilities, dim=-1)
+
         total = labels.size(0)
         correct = (predicted == labels).sum().item()
 

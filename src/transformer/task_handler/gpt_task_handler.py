@@ -64,7 +64,7 @@ class GptTaskHandler(TaskHandler):
         loss = torch.nn.functional.cross_entropy(loss_logits, labels, ignore_index=0)
         return loss
 
-    def estimate_accuracy(self, labels: tensor, predicted: tensor):
+    def estimate_accuracy(self, labels: tensor, logits: tensor):
         """
         There is no accuracy for GPT task
         """
