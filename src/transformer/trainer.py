@@ -93,17 +93,42 @@ class Trainer:
 
     # @torch.no_grad()
     # def test(self):
+    #     """
+    #     Run the model on the test set and log the loss and accuracy.
+    #     """
     #     losses = []
     #     total = 0
     #     correct = 0
 
     #     self.model.eval()
 
-    #     iter = 0
+    #     iters = 0
     #     while True:
     #         X, Y = self.get_batch('test')
     #         logits, loss = self.forward_and_loss(X, Y)
     #         losses.append(loss)
+
+    #         sample_total, sample_correct = self.task_handler.estimate_accuracy(Y, logits)
+    #         if sample_total is not None:
+    #             total += sample_total
+    #         if sample_correct is not None:
+    #             correct += sample_correct
+
+    #         iters += 1
+    #         if iters >= self.test_iters:
+    #             break
+
+    #     self.model.train()
+
+    #     loss = sum(losses) / len(losses)
+    #     loss = self.sync_up(loss)
+    #     if total == 0:
+    #         accuracy = SKIP_ACCURACY
+    #     else:
+    #         accuracy = correct / total
+    #         accuracy = self.sync_up(accuracy)
+
+    #     logger.info(f"Test loss: {loss:.2f}, accuracy: {accuracy:.2%}")
 
     def should_continue_training(self):
         if Path('./stop').exists() or Path('./stop_now').exists():
@@ -191,8 +216,10 @@ class Trainer:
         self.scaler.update()
 
     def estimate_loss_and_log_progress(self, elapsed, train_losses, lr):
-        train_loss = sum(train_losses) / len(train_losses) if len(train_losses) > 0 else None
+        train_loss = self.average_synced_up_loss(train_losses)
+
         val_loss, val_accuracy = self.estimate_val_loss()
+
         if self.config.run.is_primary:
             self.log_progress(elapsed, train_loss, val_loss, val_accuracy, lr)
 
@@ -286,47 +313,69 @@ class Trainer:
             val_loss: The estimated validation loss
             val_accuracy: The estimated validation accuracy if applicable, otherwise SKIP_ACCURACY
         """
+        # consider averaging the losses by sample count rather than by iteration to
+        # account for partial batches. Very low priority, we average lots of full batches
+        # and only very few expected to be partial.
         losses = []
         total = 0
         correct = 0
 
         self.model.eval()
+        try:
+            dump_sentences = True
+            for _ in range(self.val_iters):
+                X, Y = self.get_batch('val')
+                logits, loss = self.forward_and_loss(X, Y)
+                losses.append(loss)
 
-        dump_sentences = True
-        for _ in range(self.val_iters):
-            X, Y = self.get_batch('val')
-            logits, loss = self.forward_and_loss(X, Y)
-            losses.append(loss)
+                if dump_sentences:
+                    self.task_handler.illustrate_predictions(self.model, X, Y, logits)
+                    dump_sentences = False
 
-            if dump_sentences:
-                self.task_handler.illustrate_predictions(self.model, X, Y, logits)
-                dump_sentences = False
+                sample_total, sample_correct = self.task_handler.estimate_accuracy(Y, logits)
 
-            sample_total, sample_correct = self.task_handler.estimate_accuracy(Y, logits)
-            if sample_total is not None:
-                total += sample_total
-            if sample_correct is not None:
-                correct += sample_correct
+                total += sample_total if sample_total is not None else 0
+                correct += sample_correct if sample_correct is not None else 0
+        finally:
+            self.model.train()
 
-        self.model.train()
+        val_loss = self.average_synced_up_loss(losses)
 
-        val_loss = sum(losses) / len(losses)
-        val_loss = self.sync_up(val_loss)
         if total == 0:
             val_accuracy = SKIP_ACCURACY
         else:
-            val_accuracy = correct / total
-            val_accuracy = self.sync_up(val_accuracy)
+            val_accuracy = self.ratio_synced_up_values(correct, total)
 
         return val_loss, val_accuracy
 
+    def average_synced_up_loss(self, losses):
+        """
+        Calculates the ratio of the sum of losses across processes to the sum of their counts
+        """
+        total_loss = sum(losses) if len(losses) > 0 else 0.0
+        loss_count = len(losses)
+        loss = self.ratio_synced_up_values(total_loss, loss_count)
+        return loss
+
+    def ratio_synced_up_values(self, nominator, denominator):
+        """
+        Calculates the ratio of the sums across all processes
+        """
+        nominator = self.sync_up(nominator)
+        denominator = self.sync_up(denominator)
+        ratio = nominator / denominator if denominator != 0 else 0.0
+        return ratio
+
     def sync_up(self, item):
+        """
+        Sum up the item across all processes in the distributed setting
+        """
         if self.config.run.parallel_mode == 'ddp':
             if isinstance(item, torch.Tensor):
                 tensor = item
             else:
                 tensor = torch.tensor(item).to(self.config.run.device)
-            torch.distributed.all_reduce(tensor)
+            torch.distributed.all_reduce(tensor, op=torch.distributed.ReduceOp.SUM)
             result = tensor.item() / torch.distributed.get_world_size()
         else:
             result = item.item() if isinstance(item, torch.Tensor) else item
