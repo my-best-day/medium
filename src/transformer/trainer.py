@@ -37,7 +37,10 @@ class Trainer:
 
         self.micro_step_count = 1
         self.grad_clip = 1.0
-        self.val_iters = self.config.train.val_iters
+        self.split_iters = {
+            'val': self.config.train.val_iters,
+            'test': self.config.train.test_iters
+        }
         self.best_val_loss = float('inf')
 
     def configure_precision(self):
@@ -95,44 +98,7 @@ class Trainer:
         """
         Run the model on the test set and log the loss and accuracy.
         """
-        losses = []
-        total = 0
-        correct = 0
-
-        max_iters = self.config.train.test_iters
-
-        self.model.eval()
-        try:
-            iters = 0
-            while True:
-                X, Y = self.get_batch('test', False)
-                if X is None or Y is None:
-                    break
-
-                logits, loss = self.forward_and_loss(X, Y)
-                losses.append(loss)
-
-                sample_total, sample_correct = self.task_handler.estimate_accuracy(Y, logits)
-                total += sample_total if sample_total is not None else 0
-                correct += sample_correct if sample_correct is not None else 0
-
-                if iters % 100 == 0:
-                    logger.info("Test iteration %s, loss: %s, accuracy: %s",
-                                iters, loss, correct / total if total > 0 else 0)
-
-                # todo, stop on split exhaustion
-                iters += 1
-                if max_iters is not None and iters >= max_iters:
-                    break
-        finally:
-            self.model.train()
-
-        loss = self.average_synced_up_loss(losses)
-        if total == 0:
-            accuracy = SKIP_ACCURACY
-        else:
-            accuracy = self.ratio_synced_up_values(correct, total)
-
+        loss, accuracy = self.estimate_loss('test', False)
         logger.info(f"Test loss: {loss:.2f}, accuracy: {accuracy:.2%}")
 
     def should_continue_training(self):
@@ -223,7 +189,7 @@ class Trainer:
     def estimate_loss_and_log_progress(self, elapsed, train_losses, lr):
         train_loss = self.average_synced_up_loss(train_losses)
 
-        val_loss, val_accuracy = self.estimate_val_loss()
+        val_loss, val_accuracy = self.estimate_loss('val', True)
 
         if self.config.run.is_primary:
             self.log_progress(elapsed, train_loss, val_loss, val_accuracy, lr)
@@ -236,7 +202,7 @@ class Trainer:
         if val_loss >= self.best_val_loss:
             return False
         iters = self.iter - self.start_iter
-        if iters < self.val_iters:
+        if iters < self.split_iters.get['val']:
             return False
         return True
 
@@ -310,7 +276,7 @@ class Trainer:
         return result
 
     @torch.no_grad()
-    def estimate_val_loss(self) -> tuple[float, float]:
+    def estimate_loss(self, split, illustrate) -> tuple[float, float]:
         """
         Estimate the validation loss, and accuracy by running the model on the validation set.
 
@@ -325,32 +291,47 @@ class Trainer:
         total = 0
         correct = 0
 
+        max_iters = self.split_iters.get(split, None)
+
         self.model.eval()
         try:
-            dump_sentences = True
-            for _ in range(self.val_iters):
+            should_illustrate = illustrate
+            iters = 0
+            while True:
                 X, Y = self.get_batch('val', True)
+                if X is None or Y is None:
+                    break
+
                 logits, loss = self.forward_and_loss(X, Y)
                 losses.append(loss)
 
-                if dump_sentences:
+                if should_illustrate:
                     self.task_handler.illustrate_predictions(self.model, X, Y, logits)
-                    dump_sentences = False
+                    should_illustrate = False
 
                 sample_total, sample_correct = self.task_handler.estimate_accuracy(Y, logits)
-                total += sample_total if sample_total is not None else 0
-                correct += sample_correct if sample_correct is not None else 0
+                total += sample_total
+                correct += sample_correct
+
+                self.log_estimate_progress(split, iters, loss, correct, total)
+
+                iters += 1
+                if max_iters is not None and iters <= max_iters:
+                    break
         finally:
             self.model.train()
 
-        val_loss = self.average_synced_up_loss(losses)
-
+        loss = self.average_synced_up_loss(losses)
         if total == 0:
-            val_accuracy = SKIP_ACCURACY
+            accuracy = SKIP_ACCURACY
         else:
-            val_accuracy = self.ratio_synced_up_values(correct, total)
+            accuracy = self.ratio_synced_up_values(correct, total)
+        return loss, accuracy
 
-        return val_loss, val_accuracy
+    def log_estimate_progress(self, split, iters, loss, correct, total):
+        if iters % 100 == 0:
+            logger.info("%s iteration %s, loss: %s, accuracy: %s",
+                        split, iters, loss, correct / total if total > 0 else 0)
 
     def average_synced_up_loss(self, losses):
         """

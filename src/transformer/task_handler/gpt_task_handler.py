@@ -68,7 +68,7 @@ class GptTaskHandler(TaskHandler):
         """
         There is no accuracy for GPT task
         """
-        return None, None
+        return 0, 0
 
     def init_base_model_weights(self, model: Transformer):
         logger.info("Initializing base model weights")
