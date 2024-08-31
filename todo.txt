@@ -10,31 +10,30 @@
 
 
 # Next tasks
-* fix resuming from a checkpoint in torch_main.py
-- load the entire model state if checkpoint.task_type == config.task_type
-- load iteration, and other stuff not only if mlm but as long as the type is the same
-
-* after the above is fixed, continue with gpt training using next_config_gpt.ini which
-adjust warmup iter, and decay-iter to have another bump in the learning rate
-
 * adjust readme to the new structure. add stuff about gpt, including results
-
-* add initialization of the parameters / weights "important for GPT"
-* if not loading model state from checkpoint, use the above initialization, that is:
-- init_weights():
--- init base model weights
--- init lm model weights
-
-** unit test **
-
-
-NEXT:
-- unit tests
+* unit test ***
+* see how to have a lr schedule for continuation from a checkpoint so that
+  the lr starts with the value taken from cp, then "warms up" towards the
+  target starting point, then continues per the configured lr schedule
 
 
 
 
+-----
++ fix resuming from a checkpoint in torch_main.py
+  . load the entire model state if checkpoint.task_type == config.task_type
+  . load iteration, and other stuff not only if mlm but as long as the type is the same
 
+? after the above is fixed, continue with gpt training using next_config_gpt.ini which
+  adjust warmup iter, and decay-iter to have another bump in the learning rate
+
++ add initialization of the parameters / weights. Andrej: "important for GPT"
++ if not loading model state from checkpoint, use the above initialization, that is:
+  + init_weights():
+  + - init base model weights
+  + - init lm model weights
+
+-----
 + add cola
 + add GPT
 + move common code to common
