@@ -114,7 +114,7 @@ class Trainer:
 
     def should_estimate_loss(self):
         iters = self.iters - self.start_iter
-        result = iters % self.config.train.val_interval == 0
+        result = iters % self.config.train.val_interval == 0 and iters > 0
         return result
 
     def adjust_lr(self):
@@ -281,7 +281,8 @@ class Trainer:
     @torch.no_grad()
     def estimate_loss(self, split, illustrate) -> tuple[float, float]:
         """
-        Estimate the validation/test loss, and accuracy by running the model on the validation/test set.
+        Estimate the validation/test loss, and accuracy by running the model on the
+        validation/test set.
 
         Returns:
             val_loss: The estimated validation/test loss
