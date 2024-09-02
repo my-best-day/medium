@@ -153,7 +153,7 @@ def get_arguments():
     parser.add_argument("-i", "--input", type=str, help="The input file.")
     parser.add_argument("-o", "--output", type=str, help="The output file.")
     parser.add_argument("-v", "--vocab", type=str, help="The dir containing the vocab files.")
-    parser.add_argument("-t", "--tokenizer", type=str, choices=['bert', 'gpt'],
+    parser.add_argument("-t", "--tokenizer", type=str, choices=['bert', 'gpt', 'mock_gpt'],
                         help="The tokenizer to use.")
     parser.add_argument("-c", "--chunk-size", type=int, default=20, help="The chunk size in MB.")
     parser.add_argument("-n", "--nproc", type=int, default=1, help="The number of processes.")
@@ -172,6 +172,16 @@ def create_tokenizer(which, path):
     elif which == 'gpt':
         from transformers import GPT2Tokenizer
         tokenizer = GPT2Tokenizer.from_pretrained(path, local_files_only=True)
+    elif which == 'mock_gpt':
+        import sys
+        from pathlib import Path
+
+        # Add tests directory to the Python path
+        tests__dir = Path(__file__).resolve().parent.parent / 'tests'
+        sys.path.insert(0, str(tests__dir))
+
+        from data.gpt.mock_gpt_tokenizer import MockGptTokenizer  # type: ignore
+        tokenizer = MockGptTokenizer()
     else:
         raise ValueError(f"Unknown tokenizer type: {which}")
 
@@ -194,8 +204,8 @@ def check_should_clean_spaces(tokenizer):
     check if the tokenizer normalize spaces.
     if it doesn't, we should clean spaces. going overboard for fun.
     """
-    t1 = tokenizer.encode("h  w")
-    t2 = tokenizer.encode("h w")
+    t1 = tokenizer.encode("h  w", add_special_tokens=False)
+    t2 = tokenizer.encode("h w", add_special_tokens=False)
     should_clean_spaces = t1 != t2
     return should_clean_spaces
 

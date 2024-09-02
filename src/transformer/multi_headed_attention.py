@@ -1,7 +1,6 @@
 """Multi-Headed Attention module for a Transformer model."""
 import math
 import torch
-import logging
 
 
 ### attention layers
@@ -19,15 +18,15 @@ class MultiHeadedAttention(torch.nn.Module):
         self.dropout_value = dropout
         self.dropout = torch.nn.Dropout(dropout)
         self.is_causal = is_gpt
-        self.causal = is_gpt
-        self.flash = use_flash and hasattr(torch.nn.functional, 'scaled_dot_product_attention')
+        self.flash = use_flash and torch.cuda.is_available() and \
+            hasattr(torch.nn.functional, 'scaled_dot_product_attention')
 
         self.query = torch.nn.Linear(d_model, d_model)
         self.key = torch.nn.Linear(d_model, d_model)
         self.value = torch.nn.Linear(d_model, d_model)
         self.output_linear = torch.nn.Linear(d_model, d_model)
 
-        if not self.flash and self.causal:
+        if not self.flash and self.is_causal:
             # print("WARNING: using slow attention. Flash Attention requires PyTorch >= 2.0")
             # causal mask to ensure that attention is only applied to the left in the input sequence
             self.register_buffer("bias", torch.tril(
@@ -53,7 +52,7 @@ class MultiHeadedAttention(torch.nn.Module):
             # need to set dropout manually when using flash attention
             dropout = self.dropout_value if self.training else 0
             context = torch.nn.functional.scaled_dot_product_attention(
-                query, key, value, attn_mask=mask, dropout_p=dropout, is_causal=self.causal)
+                query, key, value, attn_mask=mask, dropout_p=dropout, is_causal=self.is_causal)
         else:
             # (batch_size, h, max_len, d_k) matmul (batch_size, h, d_k, max_len) -->
             #      (batch_size, h, max_len, max_len)

@@ -4,7 +4,7 @@ A dataset for BERT MLM training.
 XXX: NOT USED NOT TESTED XXX
 """
 from torch.utils.data import Dataset
-from data.mlm.bert_mlm_ids_sample_generator import BertMlmIdsSampleGenerator
+from task.mlm.bert_mlm_ids_sample_generator import BertMlmIdsSampleGenerator
 
 
 class BertMlmFixedLenIdsDataset(Dataset):

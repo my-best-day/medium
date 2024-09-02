@@ -1,6 +1,6 @@
 import glob
 import torch
-from data.mlm.bert_mlm_dataset_precached import BertMlmDatasetPrecached
+from task.mlm.bert_mlm_dataset_precached import BertMlmDatasetPrecached
 from transformer.lm.mlm.dump_sentences import describe
 from utils.timer import Timer
 

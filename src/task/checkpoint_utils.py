@@ -1,6 +1,6 @@
 ### WIP ###
 import logging
-from transformer.task_handler.task_handler_common import TaskHandlerCommon as THC
+from task.task_handler_common import TaskHandlerCommon as THC
 from transformer.transformer import Transformer
 from torch.optim.optimizer import Optimizer
 from transformer.trainer import Trainer

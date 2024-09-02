@@ -5,11 +5,7 @@ training procedure.
 import logging
 import torch
 import inspect
-from transformer.task_handler.task_handler_common import TaskHandlerCommon as THC
-from transformer.task_handler.mlm_task_handler import MlmTaskHandler
-from transformer.task_handler.sst2_task_handler import Sst2TaskHandler
-from transformer.task_handler.cola_task_handler import ColaTaskHandler
-from transformer.task_handler.gpt_task_handler import GptTaskHandler
+from task.task_handler_common import TaskHandlerCommon as THC
 
 
 logger = logging.getLogger(__name__)
@@ -27,10 +23,9 @@ class TorchConfigurator:
         trainer = configurator.trainer
     """
 
-    def __init__(self, config):
+    def __init__(self, config, task_handler):
         self.config = config
-
-        self.task_handler = None
+        self.task_handler = task_handler
         self.tokenizer = None
         self.model = None
         self.optimizer = None
@@ -49,7 +44,6 @@ class TorchConfigurator:
         """
         self.init_mode_set_device()
 
-        self.task_handler = self.create_task_handler()
         self.tokenizer = self.task_handler.tokenizer
 
         self.create_objects_and_trainer()
@@ -80,21 +74,6 @@ class TorchConfigurator:
         else:
             raise ValueError("Unknown parallel mode %s. Valid values are 'single', 'dp', 'ddp'.",
                              parallel_mode)
-
-    def create_task_handler(self):
-        task_type = self.config.model.task_type
-        if task_type == 'mlm':
-            task_handler = MlmTaskHandler(self.config)
-        elif task_type == 'sst2':
-            task_handler = Sst2TaskHandler(self.config)
-        elif task_type == 'cola':
-            task_handler = ColaTaskHandler(self.config)
-        elif task_type == 'gpt':
-            task_handler = GptTaskHandler(self.config)
-        else:
-            raise ValueError(f"Unknown task type: {task_type}")
-
-        return task_handler
 
     def create_objects_and_trainer(self):
         # transformer model with a language model head

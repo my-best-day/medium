@@ -1,32 +1,32 @@
+import logging
 import torch
 from torch import tensor
 from torch.nn import Module
-import logging
-from transformer.task_handler.task_handler import TaskHandler
 from transformer.lm.classifier.bert_classifier_model import BertClassifierModel
-from data.cola_dataset import ColaDataset
-from transformer.task_handler.task_handler_common import TaskHandlerCommon as THC
-from transformer.task_handler.checkpoint_utils import CheckpointUtils
 from transformer.transformer import Transformer
-from torch.optim.optimizer import Optimizer
 from transformer.trainer import Trainer
+from task.task_handler import TaskHandler
+from task.sst2.sst2_dataset import Sst2Dataset
+from task.task_handler_common import TaskHandlerCommon as THC
+from task.checkpoint_utils import CheckpointUtils
+from torch.optim.optimizer import Optimizer
 
 logger = logging.getLogger(__name__)
 
 
-class ColaTaskHandler(TaskHandler):
+class Sst2TaskHandler(TaskHandler):
 
     def __init__(self, config):
-        self.task_type = 'cola'
+        self.task_type = 'sst2'
         self.config = config
         self.tokenizer = self.create_tokenizer()
 
     def create_tokenizer(self):
-        tokenizer = THC.create_bert_tokenizer(self.config)
+        tokenizer = THC.get_bert_tokenizer(self.config)
         return tokenizer
 
     def create_lm_model(self):
-        transformer_model = THC.get_transformer_model(self.config, self.tokenizer)
+        transformer_model = THC.create_transformer_model(self.config, self.tokenizer)
 
         vocab_size = self.tokenizer.vocab_size
         result = BertClassifierModel(transformer_model, vocab_size)
@@ -50,7 +50,7 @@ class ColaTaskHandler(TaskHandler):
         """
         Illustrate the predictions of the model for curiosity and debugging purposes
         """
-        # currently no illustration for CoLA
+        # currently no illustration for SST-2
         pass
 
     @staticmethod
@@ -84,11 +84,14 @@ class ColaTaskHandler(TaskHandler):
     def get_dataset(self, epoch, split):
         assert split in ('train', 'val', 'test')
         if split == 'train':
-            filename = 'in_domain_train.tsv'
+            prefix = 'train'
         elif split == 'val':
-            filename = 'in_domain_dev.tsv'
+            prefix = 'validation'
         elif split == 'test':
-            filename = 'out_of_domain_dev.tsv'
+            prefix = 'test'
+
+        filename = f'{prefix}-00000-of-00001.parquet'
         path = self.config.run.datasets_dir / filename
-        dataset = ColaDataset(path, self.tokenizer, self.config.model.seq_len)
+        dataset = Sst2Dataset(path, self.tokenizer, self.config.model.seq_len)
+
         return dataset

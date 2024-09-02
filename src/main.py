@@ -29,7 +29,8 @@ def config_wandb(config):
 
 
 def run(config):
-    configurator = TorchConfigurator(config)
+    task_handler = create_task_handler(config)
+    configurator = TorchConfigurator(config, task_handler)
     configurator.configure()
     trainer = configurator.trainer
     if config.train.test:
@@ -70,10 +71,33 @@ def ddp_worker(config, local_rank, world_size):
     torch.distributed.destroy_process_group()
 
 
-def _main():
+def initialize_config():
     args = get_args()
     config = get_config(args)
+    return config
 
+
+def create_task_handler(self):
+    from task.mlm.mlm_task_handler import MlmTaskHandler
+    from task.sst2.sst2_task_handler import Sst2TaskHandler
+    from task.cola.cola_task_handler import ColaTaskHandler
+    from task.gpt.gpt_task_handler import GptTaskHandler
+    task_type = self.config.model.task_type
+    if task_type == 'mlm':
+        task_handler = MlmTaskHandler(self.config)
+    elif task_type == 'sst2':
+        task_handler = Sst2TaskHandler(self.config)
+    elif task_type == 'cola':
+        task_handler = ColaTaskHandler(self.config)
+    elif task_type == 'gpt':
+        task_handler = GptTaskHandler(self.config)
+    else:
+        raise ValueError(f"Unknown task type: {task_type}")
+
+    return task_handler
+
+
+def main(config):
     logfile_path = config.run.logs_dir / 'log.txt'
     config_logging(logfile_path)
 
@@ -86,10 +110,11 @@ def _main():
             config_wandb(config)
 
     if config.run.parallel_mode == 'ddp':
-        run_ddp(config, args.nproc)
+        run_ddp(config, config.run.nproc)
     else:
         run(config)
 
 
 if __name__ == "__main__":
-    _main()
+    config = initialize_config()
+    main(config)

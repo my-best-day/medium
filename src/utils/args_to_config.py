@@ -38,6 +38,7 @@ def get_config(args):
         base_dir=args.base_dir,
         run_id=args.run_id,
         parallel_mode=args.parallel_mode,
+        nproc=args.nproc,
         local_rank=args.local_rank,
         dist_master_addr=args.dist_master_addr,
         dist_master_port=args.dist_master_port,

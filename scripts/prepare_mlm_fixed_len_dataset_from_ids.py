@@ -17,7 +17,7 @@ from sklearn.model_selection import train_test_split
 from pathlib import Path
 import argparse
 from transformers import BertTokenizer
-from data.mlm.bert_mlm_ids_sample_generator import BertMlmIdsSampleGenerator
+from task.mlm.bert_mlm_ids_sample_generator import BertMlmIdsSampleGenerator
 import itertools
 
 logger = logging.getLogger(__name__)
@@ -134,7 +134,7 @@ where wiki is the label, 128 is the max length, and 123 is the random seed.
         raise FileNotFoundError(f"Output directory {args.output} not found.")
 
     # validate maxlen is positive number in the rage of 16 to 2048
-    if args.max_len < 16 or args.max_len > 2048:
+    if args.max_len < 12 or args.max_len > 2048:
         raise ValueError(f"Max length must be in the range of 16 to 2048: {args.max_len}")
 
     args.vocab = Path(args.vocab)

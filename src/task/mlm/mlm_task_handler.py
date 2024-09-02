@@ -1,35 +1,40 @@
-import logging
 import torch
 from torch import tensor
 from torch.nn import Module
-from transformer.task_handler.task_handler import TaskHandler
-from transformer.lm.classifier.bert_classifier_model import BertClassifierModel
-from data.sst2_dataset import Sst2Dataset
-from transformer.task_handler.task_handler_common import TaskHandlerCommon as THC
-from transformer.task_handler.checkpoint_utils import CheckpointUtils
+import logging
+from transformer.lm.mlm.bert_mlm_model import BertMlmModel
+from transformer.lm.mlm.dump_sentences import DumpSentences
 from transformer.transformer import Transformer
-from torch.optim.optimizer import Optimizer
 from transformer.trainer import Trainer
+from task.task_handler import TaskHandler
+from task.task_handler_common import TaskHandlerCommon as THC
+from task.checkpoint_utils import CheckpointUtils
+from torch.optim.optimizer import Optimizer
 
 logger = logging.getLogger(__name__)
 
 
-class Sst2TaskHandler(TaskHandler):
+class MlmTaskHandler(TaskHandler):
 
     def __init__(self, config):
-        self.task_type = 'sst2'
+        self.task_type = 'mlm'
         self.config = config
         self.tokenizer = self.create_tokenizer()
 
+        self.dumper = DumpSentences(self.tokenizer)
+
     def create_tokenizer(self):
-        tokenizer = THC.get_bert_tokenizer(self.config)
+        tokenizer = THC.create_bert_tokenizer(self.config)
         return tokenizer
 
     def create_lm_model(self):
-        transformer_model = THC.create_transformer_model(self.config, self.tokenizer)
+        """
+        Returns the MLM model for the given config and tokenizer.
+        """
+        transformer_model = THC.get_transformer_model(self.config, self.tokenizer)
 
         vocab_size = self.tokenizer.vocab_size
-        result = BertClassifierModel(transformer_model, vocab_size)
+        result = BertMlmModel(transformer_model, vocab_size, apply_softmax=False)
 
         return result
 
@@ -50,13 +55,13 @@ class Sst2TaskHandler(TaskHandler):
         """
         Illustrate the predictions of the model for curiosity and debugging purposes
         """
-        # currently no illustration for SST-2
-        pass
+        text = self.dumper.batched_debug(sentence, labels, predicted)
+        logger.info("\n".join(text))
 
     @staticmethod
     def get_loss(logits: tensor, labels: tensor):
-        # labels should be [batch_size]
-        loss = torch.nn.functional.cross_entropy(logits, labels)
+        loss_logits = logits.transpose(1, 2)  # Shape: [batch_size, vocab_size, seq_len]
+        loss = torch.nn.functional.cross_entropy(loss_logits, labels, ignore_index=0)
         return loss
 
     def estimate_accuracy(self, labels: tensor, logits: tensor):
@@ -66,8 +71,13 @@ class Sst2TaskHandler(TaskHandler):
         probabilities = torch.softmax(logits, dim=-1)
         _, predicted = torch.max(probabilities, dim=-1)
 
-        total = labels.size(0)
-        correct = (predicted == labels).sum().item()
+        # mask: ignore padding (assumed 0) and focus on masked tokens (assumed non zero)
+        flat_labels = labels.flatten()
+        flat_predicted = predicted.flatten()
+
+        mask = (flat_labels != 0)
+        total = mask.sum().item()
+        correct = (flat_predicted[mask] == flat_labels[mask]).sum().item()
 
         return total, correct
 
@@ -77,21 +87,16 @@ class Sst2TaskHandler(TaskHandler):
 
     def init_lm_head_weights(self, lm_head: torch.nn.Module):
         logger.info("Initializing LM head weights")
-        torch.nn.init.normal_(lm_head.classifier.weight, mean=0.0, std=0.02)
-        if lm_head.classifier.bias is not None:
-            torch.nn.init.zeros_(lm_head.classifier.bias)
+        torch.nn.init.normal_(lm_head.linear.weight, mean=0.0, std=0.02)
+        if lm_head.linear.bias is not None:
+            torch.nn.init.zeros_(lm_head.linear.bias)
+
+        # Optional: Initialize MLM head weights with BERT's word embeddings
+        # mlm_head.weight.data.copy_(bert_model.embeddings.word_embeddings.weight.data)
 
     def get_dataset(self, epoch, split):
-        assert split in ('train', 'val', 'test')
-        if split == 'train':
-            prefix = 'train'
-        elif split == 'val':
-            prefix = 'validation'
-        elif split == 'test':
-            prefix = 'test'
-
-        filename = f'{prefix}-00000-of-00001.parquet'
-        path = self.config.run.datasets_dir / filename
-        dataset = Sst2Dataset(path, self.tokenizer, self.config.model.seq_len)
-
+        from task.mlm.bert_mlm_dataset_precached import BertMlmDatasetPrecached
+        percentage = THC.get_percentage(self.config, split)
+        dataset_file = THC.find_dataset_file(self.config, epoch, split)
+        dataset = BertMlmDatasetPrecached(dataset_file, percentage)
         return dataset

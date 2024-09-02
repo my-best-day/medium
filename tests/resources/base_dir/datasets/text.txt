@@ -1,0 +1,26 @@
+ab abc abcd abcde
+bc bcd bcde bcdea
+cd cde cdea cdeab
+de dea deab deabc
+ea eab eabc eabcd
+abc abcd abcde ab
+bcd bcde bcdea bc
+cde cdea cdeab cd
+dea deab deabc de
+eab eabc eabcd ea
+a ab abc abcd abcd
+b bc bcd bcde bcde
+c cd cde cdea cdea
+d de dea deab deab
+e ea eab eabc eabc
+a a b b b c c c d d d e e e a
+b b c c c d d d e e e a a a b
+c c d d d e e e a a a b b b c
+d d e e e a a a b b b c c c d
+e e a a a b b b c c c d d d e
+a a b b b c c c d d d e e e a
+b b c c c d d d e e e a a a b
+c c d d d e e e a a a b b b c
+d d e e e a a a b b b c c c d
+e e a a a b b b c c c d d d e
+a a b b b c c c d d d e e e a

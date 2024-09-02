@@ -12,17 +12,25 @@ class BertMlmDatasetPrecached(Dataset):
     Dataset for pre-cached BERT MLM inputs and labels.
 
     Masking is already done in the cached data.
+    Cached data is a list of pairs of items. Both items are lists of token ids.
+    The first item is the input sentence with a masked token at a random position.
+    The second item is the label, which has the token id 0 at non-masked positions
+    and zeros otherwise.
+    See bert_mlm_ids_sample_generator.py for more details.
     """
     def __init__(self, path, percentage=1.0):
         self._type = None
         self._percentage = percentage
+        self.cached_data = self.load_data(path)
+
+    def load_data(self, path):
         opener = gzip.open if path.endswith('.gz') else open
         with opener(path, 'rb') as f:
             packed_data = f.read()
-            self.cached_data = msgpack.unpackb(packed_data, raw=False)
-        if percentage < 1.0:
-            self.cached_data = self.cached_data[:int(len(self.cached_data) * percentage)]
-        # logging.info(timer.step(f"loaded precached dataset {path}"))
+            cached_data = msgpack.unpackb(packed_data, raw=False)
+        if self._percentage < 1.0:
+            cached_data = self.cached_data[:int(len(self.cached_data) * self._percentage)]
+        return cached_data
 
     def __len__(self):
         """

@@ -89,6 +89,7 @@ class RunConfig(BaseConfig):
     run_id: int
 
     parallel_mode: str      # single, dp, ddp
+    nproc: int
     dist_master_addr: str
     dist_master_port: str
     dist_backend: str
@@ -134,9 +135,10 @@ class RunConfig(BaseConfig):
             raise ValueError(f'Invalid parallel mode {self.parallel_mode}. '
                              'Valid values are single, dp, ddp.')
 
-        datasets_dir = self.base_dir / 'datasets'
-        if not datasets_dir.exists():
-            raise ValueError(f'Datasets directory {datasets_dir} does not exist.')
+        if self.datasets_dir is None:
+            self.datasets_dir = self.base_dir / 'datasets'
+        if not self.datasets_dir.exists():
+            raise ValueError(f'Datasets directory {self.datasets_dir} does not exist.')
 
         self.run_dir = self.base_dir / 'runs' / f'run{self.run_id}'
         self.run_dir.mkdir(parents=True, exist_ok=True)
