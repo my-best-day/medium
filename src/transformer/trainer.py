@@ -1,6 +1,7 @@
 import time
 import torch
 import logging
+from collections import deque
 from pathlib import Path
 from contextlib import nullcontext
 from utils.timer import Timer
@@ -41,6 +42,11 @@ class Trainer:
             'val': self.config.train.val_iters,
             'test': self.config.train.test_iters
         }
+
+        val_loss_window_size = max(3, 0.00025 * config.train.max_iters)
+        # 25_000 iters -> 25 / 25_000 = 0.001; 100_000 iters -> 25 / 100_000 = 0.00025
+        self.min_improvement = 25 / config.train.max_iters
+        self.last_n_val_losses = deque(maxlen=val_loss_window_size)
         self.best_val_loss = float('inf')
 
     def configure_precision(self):
@@ -193,19 +199,20 @@ class Trainer:
         train_loss = self.average_synced_up_loss(train_losses)
 
         val_loss, val_accuracy = self.estimate_loss('val', True)
+        self.last_n_val_losses.append(val_loss)
+        avg_val_loss = sum(self.last_n_val_losses) / len(self.last_n_val_losses)
 
         if self.config.run.is_primary:
             self.log_progress(elapsed, train_loss, val_loss, val_accuracy, lr)
 
-            if val_loss < self.best_val_loss and self.iters > self.config.train.val_interval:
-                self.best_val_loss = val_loss
-                self.save_checkpoint(self.iters, val_loss)
+            if self.should_save_checkpoint(avg_val_loss):
+                self.save_checkpoint(self.iters, avg_val_loss)
+                self.best_val_loss = avg_val_loss
 
-    def should_save_checkpoint(self, val_loss):
-        if val_loss >= self.best_val_loss:
+    def should_save_checkpoint(self, avg_val_loss):
+        if self.iters < self.config.train.val_interval:
             return False
-        iters = self.iters - self.start_iter
-        if iters < self.split_iters.get['val']:
+        if (avg_val_loss - self.best_val_loss) < self.min_improvement:
             return False
         return True
 
