@@ -66,6 +66,7 @@ class TorchConfigurator:
             self.config.run.device = 'cuda'
 
         elif parallel_mode == 'ddp':
+            # DDP can use remote GPUs - don't check device count,
             if not torch.cuda.is_available():
                 raise RuntimeError('DDP requires CUDA devices.')
             torch.cuda.set_device(self.config.run.local_rank)
@@ -95,6 +96,8 @@ class TorchConfigurator:
             # requires PyTorch 2.0
             model = torch.compile(model)
         logger.info(f"Model {'compiled' if self.config.run.compile else 'not compiled'}")
+
+        model = model.to(self.config.run.device)
 
         model = self.wrap_parallel_model(model)
 
@@ -127,8 +130,6 @@ class TorchConfigurator:
 
     def wrap_parallel_model(self, model):
         """Wrap the model with Distributed/DataParallel or none according to the config"""
-        model = model.to(self.config.run.device)
-
         mode = self.config.run.parallel_mode
         if mode == 'single':
             # no need to wrap the model
