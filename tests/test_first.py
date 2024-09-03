@@ -10,7 +10,7 @@ import abc
 
 class _TestConfiguration(unittest.TestCase, abc.ABC):
     def setUp(self):
-        self.setup_base_dir()
+        self.setup_base_dir_tree()
         self.config = self.create_config(self.base_dir)
         self.task_handler = self.create_task_handler(self.config)
         self.configurator = TorchConfigurator(self.config, self.task_handler)
@@ -89,20 +89,20 @@ class _TestConfiguration(unittest.TestCase, abc.ABC):
         self.assertEqual(trainer.iters, 0)
         self.assertEqual(trainer.start_iter, 0)
 
-    def setup_base_dir(self):
+    def setup_base_dir_tree(self):
         self.base_dir = Path(tempfile.mkdtemp())
         runs_dir = self.base_dir / 'runs'
         runs_dir.mkdir(parents=True, exist_ok=True)
 
-        self.setup_vocab()
-        self.setup_datasets()
+        self.setup_vocab_dir()
+        self.setup_datasets_dir()
 
     @abc.abstractmethod
-    def setup_vocab(self):
+    def setup_vocab_dir(self):
         pass
 
     @abc.abstractmethod
-    def setup_datasets(self):
+    def setup_datasets_dir(self):
         pass
 
     def remove_base_dir(self):
@@ -113,7 +113,11 @@ class TestMlmConfiguration(_TestConfiguration):
     def create_config(self, base_dir):
         return create_mlm_config(base_dir)
 
-    def setup_vocab(self):
+    def setup_vocab_dir(self):  # NOSONAR
+        """
+        Set up the vocabulary directory for MLM configuration.
+        This method is called by setup_base_dir_tree in the abstract superclass.
+        """
         src_dir = Path('tests/resources/base_dir')
 
         vocab_dir = self.base_dir / 'vocab'
@@ -121,7 +125,11 @@ class TestMlmConfiguration(_TestConfiguration):
         vocab_path = vocab_dir / 'vocab.txt'
         shutil.copyfile(src_dir / 'vocab' / 'vocab.txt', vocab_path)
 
-    def setup_datasets(self):
+    def setup_datasets_dir(self):    # NOSONAR
+        """
+        Set up the datasets directory for MLM configuration.
+        This method is called by setup_base_dir_tree in the abstract superclass.
+        """
         src_dir = Path('tests/resources/base_dir')
         datasets_dir = self.base_dir / 'datasets'
         datasets_dir.mkdir(parents=True, exist_ok=True)
@@ -130,7 +138,7 @@ class TestMlmConfiguration(_TestConfiguration):
             if 'mlm1_12_1' in filename.name:
                 shutil.copy(filename, datasets_dir)
 
-    def create_task_handler(self, config):
+    def create_task_handler(self, config):  # NOSONAR
         from task.mlm.mlm_task_handler import MlmTaskHandler
         task_handler = MlmTaskHandler(self.config)
         return task_handler
@@ -140,11 +148,18 @@ class TestGptConfiguration(_TestConfiguration):
     def create_config(self, base_dir):
         return create_gpt_config(base_dir)
 
-    def setup_vocab(self):
-        # The MockGptTaskHandler does not need a vocab.
+    def setup_vocab_dir(self):  # NOSONAR
+        """
+        MockGptTaskHandler does not need a vocab directory or files.
+        This method is called by setup_base_dir_tree in the abstract superclass.
+        """
         pass
 
-    def setup_datasets(self):
+    def setup_datasets_dir(self):  # NOSONAR
+        """
+        Set up the datasets directory for GPT configuration.
+        This method is called by setup_base_dir_tree in the abstract superclass.
+        """
         datasets_dir = self.base_dir / 'datasets'
         datasets_dir.mkdir(parents=True, exist_ok=True)
 
