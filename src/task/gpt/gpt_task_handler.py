@@ -30,7 +30,7 @@ class GptTaskHandler(TaskHandler):
         return tokenizer
 
     def create_lm_model(self):
-        transformer_model = THC.get_transformer_model(self.config, self.tokenizer)
+        transformer_model = THC.create_transformer_model(self.config, self.tokenizer)
 
         vocab_size = self.tokenizer.vocab_size
         result = GptModel(transformer_model, vocab_size)

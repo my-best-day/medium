@@ -31,7 +31,7 @@ class MlmTaskHandler(TaskHandler):
         """
         Returns the MLM model for the given config and tokenizer.
         """
-        transformer_model = THC.get_transformer_model(self.config, self.tokenizer)
+        transformer_model = THC.create_transformer_model(self.config, self.tokenizer)
 
         vocab_size = self.tokenizer.vocab_size
         result = BertMlmModel(transformer_model, vocab_size, apply_softmax=False)

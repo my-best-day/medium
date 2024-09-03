@@ -106,28 +106,6 @@ class TorchConfigurator:
 
         return model
 
-    def create_transformer_model(self):
-        """
-        Returns the base, transformer model for the given config and tokenizer.
-        """
-        from transformer.transformer import Transformer
-
-        model_config = self.config.model
-        vocab_size = self.tokenizer.vocab_size
-
-        transformer_model = Transformer(
-            vocab_size=vocab_size,
-            d_model=model_config.d_model,
-            n_layers=model_config.n_layers,
-            heads=model_config.heads,
-            dropout=self.config.train.dropout,
-            seq_len=model_config.seq_len,
-            is_gpt=self.config.model.task_type == 'gpt',
-            use_flash=self.config.run.flash
-        )
-
-        return transformer_model
-
     def wrap_parallel_model(self, model):
         """Wrap the model with Distributed/DataParallel or none according to the config"""
         mode = self.config.run.parallel_mode

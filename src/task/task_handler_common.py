@@ -8,7 +8,7 @@ logger = logging.getLogger(__name__)
 
 class TaskHandlerCommon:
     @staticmethod
-    def get_transformer_model(config, tokenizer):
+    def create_transformer_model(config, tokenizer):
         """
         Returns the base, transformer model for the given config and tokenizer.
         """
