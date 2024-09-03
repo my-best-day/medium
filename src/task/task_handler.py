@@ -24,7 +24,7 @@ class TaskHandler:
 
     @abstractmethod
     def gen_checkpoint(self, model: Transformer, optimizer: Optimizer,
-                       iter: int, sample_iter: int, val_loss: float):
+                       iter: int, sample_iter: int, val_loss: float, lr: float):
         """
         Generate a checkpoint for the given model, optimizer, iteration, sample count, and
         validation loss

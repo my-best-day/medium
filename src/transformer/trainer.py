@@ -43,10 +43,11 @@ class Trainer:
             'test': self.config.train.test_iters
         }
 
-        val_loss_window_size = max(3, 0.00025 * config.train.max_iters)
+        val_loss_window_size = int(max(3, 0.00025 * config.train.max_iters))
         # 25_000 iters -> 25 / 25_000 = 0.001; 100_000 iters -> 25 / 100_000 = 0.00025
         self.min_improvement = 25 / config.train.max_iters
         self.last_n_val_losses = deque(maxlen=val_loss_window_size)
+        self.resume_lr = None
         self.best_val_loss = float('inf')
 
     def configure_precision(self):
@@ -124,13 +125,38 @@ class Trainer:
         return result
 
     def adjust_lr(self):
-        lr = self.get_lr(self.iters)
+        lr = self.get_lr()
         for param_group in self.optimizer.param_groups:
             param_group['lr'] = lr
         return lr
 
-    def get_lr(self, iter):
+    def get_lr(self):
+        """
+        Get the learning rate for the current iteration.
+        """
+        lr = self.get_lr_cosine_annealing_with_warmup()
+        lr = self.get_smoothed_lr_after_resume(lr)
+        return lr
+
+    def get_smoothed_lr_after_resume(self, lr):
+        """
+        Gradually warm up the learning rate from the resume value over 50 iterations.
+        """
+        resume_lr = self.resume_lr
+        if resume_lr is not None:
+            rel_iters = self.iters - self.start_iter
+            if rel_iters < 50:
+                # slowly warm up the learning rate from the resume value
+                lr = (rel_iters * lr + (50 - rel_iters) * resume_lr) / 50
+        return lr
+
+    def get_lr_cosine_annealing_with_warmup(self):
+        """
+        Standard cosine annealing with warmup learning rate scheduler.
+        """
         import math
+
+        iters = self.iters
 
         lr = self.config.train.learning_rate
         min_lr = self.config.train.min_learning_rate
@@ -138,11 +164,11 @@ class Trainer:
         warmup_iters = self.config.train.warmup_iters
         lr_decay_iters = self.config.train.lr_decay_iters
 
-        if iter < warmup_iters:
-            lr = iter * lr / warmup_iters
+        if iters < warmup_iters:
+            lr = iters * lr / warmup_iters
 
-        elif iter <= lr_decay_iters:
-            ratio = (iter - warmup_iters) / (lr_decay_iters - warmup_iters)
+        elif iters <= lr_decay_iters:
+            ratio = (iters - warmup_iters) / (lr_decay_iters - warmup_iters)
             assert 0 <= ratio <= 1
             coeff = 0.5 * (1.0 + math.cos(math.pi * ratio))  # range 0..1
             lr = min_lr + coeff * (lr - min_lr)
@@ -206,7 +232,7 @@ class Trainer:
             self.log_progress(elapsed, train_loss, val_loss, val_accuracy, lr)
 
             if self.should_save_checkpoint(avg_val_loss):
-                self.save_checkpoint(self.iters, avg_val_loss)
+                self.save_checkpoint(self.iters, avg_val_loss, lr)
                 self.best_val_loss = avg_val_loss
 
     def should_save_checkpoint(self, avg_val_loss):
@@ -261,7 +287,7 @@ class Trainer:
             step=self.iters
         )
 
-    def save_checkpoint(self, iter: int, val_loss: float):
+    def save_checkpoint(self, iter: int, val_loss: float, lr: float):
         # skip checkpoint if this is not the main process
         if not self.config.run.is_primary:
             return
@@ -276,7 +302,8 @@ class Trainer:
             self.optimizer,
             iter,
             self.sample_iter,
-            val_loss
+            val_loss,
+            lr
         )
 
         torch.save(checkpoint, checkpoint_path)

@@ -34,10 +34,10 @@ class Sst2TaskHandler(TaskHandler):
         return result
 
     def gen_checkpoint(self, model: Transformer, optimizer: Optimizer,
-                       iter: int, sample_iter: int, val_loss: float):
+                       iter: int, sample_iter: int, val_loss: float, lr: float):
 
         checkpoint = CheckpointUtils.gen_checkpoint(self.config, self.task_type, model, optimizer,
-                                                    iter, sample_iter, val_loss)
+                                                    iter, sample_iter, val_loss, lr)
         return checkpoint
 
     def resume_from_checkpoint_dict(self, model: Transformer, optimizer: Optimizer,

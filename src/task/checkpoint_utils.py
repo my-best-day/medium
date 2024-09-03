@@ -12,7 +12,7 @@ class CheckpointUtils:
 
     @staticmethod
     def gen_checkpoint(config, task_type: str, model: Transformer, optimizer: Optimizer,
-                       iter: int, sample_iter: int, val_loss: float):
+                       iter: int, sample_iter: int, val_loss: float, lr: float):
         # skip checkpoint if this is not the main process
         if not config.run.is_primary:
             return
@@ -29,6 +29,7 @@ class CheckpointUtils:
             'lm_head': the_model.lm_head.state_dict(),
 
             'optimizer': optimizer.state_dict(),
+            'lr': lr,
             'val_loss': val_loss,
             'config': config.to_dict(),
         }
@@ -73,6 +74,7 @@ class CheckpointUtils:
             trainer.start_iter = checkpoint['iter']
             trainer.iters = trainer.start_iter
 
+            trainer.resume_lr = checkpoint.get('lr', None)
             trainer.best_val_loss = checkpoint['val_loss']
 
         # log sample count, iteration, and best validation loss

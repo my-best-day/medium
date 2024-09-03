@@ -77,20 +77,20 @@ def initialize_config():
     return config
 
 
-def create_task_handler(self):
+def create_task_handler(config):
     from task.mlm.mlm_task_handler import MlmTaskHandler
     from task.sst2.sst2_task_handler import Sst2TaskHandler
     from task.cola.cola_task_handler import ColaTaskHandler
     from task.gpt.gpt_task_handler import GptTaskHandler
-    task_type = self.config.model.task_type
+    task_type = config.model.task_type
     if task_type == 'mlm':
-        task_handler = MlmTaskHandler(self.config)
+        task_handler = MlmTaskHandler(config)
     elif task_type == 'sst2':
-        task_handler = Sst2TaskHandler(self.config)
+        task_handler = Sst2TaskHandler(config)
     elif task_type == 'cola':
-        task_handler = ColaTaskHandler(self.config)
+        task_handler = ColaTaskHandler(config)
     elif task_type == 'gpt':
-        task_handler = GptTaskHandler(self.config)
+        task_handler = GptTaskHandler(config)
     else:
         raise ValueError(f"Unknown task type: {task_type}")
 
