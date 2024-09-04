@@ -1,3 +1,4 @@
+# WIP this test actually runs the model's forward pass
 import unittest
 import tempfile
 import shutil
@@ -118,7 +119,7 @@ class TestMlmConfiguration(_TestConfiguration):
         Set up the vocabulary directory for MLM configuration.
         This method is called by setup_base_dir_tree in the abstract superclass.
         """
-        src_dir = Path('tests/resources/base_dir')
+        src_dir = Path('tests_integration/resources/base_dir')
 
         vocab_dir = self.base_dir / 'vocab'
         vocab_dir.mkdir(parents=True, exist_ok=True)
@@ -130,7 +131,7 @@ class TestMlmConfiguration(_TestConfiguration):
         Set up the datasets directory for MLM configuration.
         This method is called by setup_base_dir_tree in the abstract superclass.
         """
-        src_dir = Path('tests/resources/base_dir')
+        src_dir = Path('tests_integration/resources/base_dir')
         datasets_dir = self.base_dir / 'datasets'
         datasets_dir.mkdir(parents=True, exist_ok=True)
         src_datasets_dir = src_dir / 'datasets'
@@ -163,7 +164,7 @@ class TestGptConfiguration(_TestConfiguration):
         datasets_dir = self.base_dir / 'datasets'
         datasets_dir.mkdir(parents=True, exist_ok=True)
 
-        src_dir = Path('tests/resources/base_dir')
+        src_dir = Path('tests_integration/resources/base_dir')
         src_datasets_dir = src_dir / 'datasets'
         for filename in src_datasets_dir.iterdir():
             if 'gpt_2' in filename.name:
