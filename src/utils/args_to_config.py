@@ -21,6 +21,7 @@ def get_config(args):
         learning_rate=args.learning_rate,
         min_learning_rate=args.min_learning_rate,
         warmup_iters=args.warmup_iters,
+        resume_warmup_iters=args.resume_warmup_iters,
         lr_decay_iters=args.lr_decay_iters,
         max_iters=args.max_iters,
         val_iters=args.val_iters,

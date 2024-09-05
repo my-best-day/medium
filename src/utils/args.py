@@ -116,6 +116,8 @@ def add_train_arguments(parser: configargparse.ArgumentParser):
     parser.add_argument('--min-learning-rate', type=float,
                         default=None, help='Minimum learning rate')
     parser.add_argument('--warmup-iters', type=int, default=None, help='Warmup iterations')
+    parser.add_argument('--resume-warmup-iters', type=int, default=50,
+                        help='steps to smoothly inc learning rate after resume from checkpoint')
     parser.add_argument('--lr-decay-iters', type=int, default=None,
                         help='Learning rate decay iterations')
     parser.add_argument('--max-iters', type=int, default=None, help='Maximum iterations')

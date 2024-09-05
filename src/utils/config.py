@@ -46,6 +46,7 @@ class TrainConfig(BaseConfig):
     learning_rate: float
     min_learning_rate: float
     warmup_iters: int
+    resume_warmup_iters: int
     lr_decay_iters: int
     max_iters: int
 

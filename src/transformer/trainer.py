@@ -140,14 +140,15 @@ class Trainer:
 
     def get_smoothed_lr_after_resume(self, lr):
         """
-        Gradually warm up the learning rate from the resume value over 50 iterations.
+        Gradually warm up the learning rate from the resume value.
         """
         resume_lr = self.resume_lr
+        resume_warmup_iters = self.config.train.resume_warmup_iters
         if resume_lr is not None:
             rel_iters = self.iters - self.start_iter
-            if rel_iters < 50:
-                # slowly warm up the learning rate from the resume value
-                lr = (rel_iters * lr + (50 - rel_iters) * resume_lr) / 50
+            if rel_iters < resume_warmup_iters:
+                # smoothly increase learning rate from the resume value
+                lr = resume_lr + (lr - resume_lr) * rel_iters / resume_warmup_iters
         return lr
 
     def get_lr_cosine_annealing_with_warmup(self):
