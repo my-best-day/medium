@@ -236,6 +236,10 @@ class Trainer:
                 self.best_val_loss = avg_val_loss
 
     def should_save_checkpoint(self, avg_val_loss):
+        # allow the user to save checkpoint on demand
+        if Path('./save_checkpoint').exists():
+            Path('./save_checkpoint').unlink()
+            return True
         if self.iters < self.config.train.val_interval:
             return False
         if (self.best_val_loss - avg_val_loss) < self.min_improvement:
