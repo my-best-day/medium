@@ -238,7 +238,7 @@ class Trainer:
     def should_save_checkpoint(self, avg_val_loss):
         if self.iters < self.config.train.val_interval:
             return False
-        if (avg_val_loss - self.best_val_loss) < self.min_improvement:
+        if (self.best_val_loss - avg_val_loss) < self.min_improvement:
             return False
         return True
 
