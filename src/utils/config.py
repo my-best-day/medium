@@ -60,6 +60,7 @@ class TrainConfig(BaseConfig):
     # remains the same, set this flag to start a new training phase (e.g., switching from
     # pre-training to fine-tuning or adjusting the training setup like learning rate schedule).
     switch_training: bool = False
+    dont_load_optimizer: bool = False
     test: bool = False
 
     max_checkpoints: Optional[int] = None

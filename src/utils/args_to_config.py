@@ -15,6 +15,7 @@ def get_config(args):
         val_interval=args.val_interval,
         checkpoint=args.checkpoint,
         switch_training=args.switch_training,
+        dont_load_optimizer=args.dont_load_optimizer,
         test=args.test,
 
         learning_rate=args.learning_rate,
