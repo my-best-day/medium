@@ -5,6 +5,7 @@ training procedure.
 import logging
 import torch
 import inspect
+from pathlib import Path
 from task.task_handler_common import TaskHandlerCommon as THC
 
 
@@ -234,6 +235,8 @@ class TorchConfigurator:
         return trainer
 
     def resume_from_checkpoint(self):
+        # we only load the checkpoint in the primary process. A later sync
+        # broadcast all parameters / states to other processes.
         if not self.config.run.is_primary:
             return
 
@@ -241,8 +244,7 @@ class TorchConfigurator:
         if checkpoint_path is None:
             return
 
-        # we only load the checkpoint in the primary process. A later sync
-        # broadcast all parameters / states to other processes.
+        self.validate_checkpoint_path(checkpoint_path)
 
         logger.info("Resuming from checkpoint at %s", checkpoint_path)
         # use map_location='cpu' if GPU memory an issue (broadcasting required in that case!)
@@ -251,6 +253,18 @@ class TorchConfigurator:
 
         self.task_handler.resume_from_checkpoint_dict(self.model, self.optimizer, self.trainer,
                                                       checkpoint)
+
+    def validate_checkpoint_path(self, i_checkpoint_path):
+        """
+        Validate that checkpoint path is points to a readable file.
+        """
+        checkpoint_path = Path(i_checkpoint_path)
+        if checkpoint_path.is_dir():
+            raise IsADirectoryError(f"Checkpoint path is a directory: {checkpoint_path}")
+        elif not checkpoint_path.exists() or not checkpoint_path.is_file():
+            raise FileNotFoundError(f"Checkpoint file or symlink not found: {checkpoint_path}")
+        elif not checkpoint_path.is_readable():
+            raise PermissionError(f"Checkpoint file is not readable: {checkpoint_path}")
 
     def initialize_objects(self):
         """
