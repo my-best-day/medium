@@ -63,8 +63,10 @@ class CheckpointUtils:
             lm_head.load_state_dict(checkpoint['lm_head'])
             config.run.init_lm_head_weights = False
 
-            optimizer.load_state_dict(checkpoint['optimizer'])
-            config.run.skip_sync_optimizer_state = False
+            if not config.train.dont_load_optimizer:
+                optimizer.load_state_dict(checkpoint['optimizer'])
+                config.run.skip_sync_optimizer_state = False
+
             # back compatibility - OK to remove in the near near future
             if 'sample_count' in checkpoint:
                 trainer.sample_iter = checkpoint['sample_count']

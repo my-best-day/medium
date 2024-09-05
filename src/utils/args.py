@@ -104,6 +104,8 @@ def add_train_arguments(parser: configargparse.ArgumentParser):
                         'Skip loading the language model head, optimizer, and trainer states '
                         'from the checkpoint (e.g., switch from pre-training to fine-tuning '
                         'or modify the training setup).')
+    parser.add_argument('--dont-load-optimizer', action='store_true', default=False,
+                        help='Do not load the optimizer state from the checkpoint.')
     parser.add_argument('--dataset-pattern', type=str, default=None, help='Dataset pattern')
     parser.add_argument('--val-dataset-pattern', type=str, default=None, help='Validation pattern')
     parser.add_argument('--test-dataset-pattern', type=str, default=None, help='Test pattern')
