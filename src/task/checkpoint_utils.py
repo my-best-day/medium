@@ -77,7 +77,6 @@ class CheckpointUtils:
             trainer.iters = trainer.start_iter
 
             trainer.resume_lr = checkpoint.get('lr', None)
-            trainer.best_val_loss = checkpoint['val_loss']
 
         # log sample count, iteration, and best validation loss
         logger.info("Resuming from sample %s, iteration %s, with val loss %s",
