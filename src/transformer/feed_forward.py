@@ -22,8 +22,12 @@ class FeedForward(torch.nn.Module):
         self.activation = torch.nn.GELU()
 
     def forward(self, x):
+        # (b, sq, d) * (d, 4d) -> (b, sq, 4d)
         out = self.fc1(x)
+        # (b, sq, 4d) -> (b, sq, 4d)
         out = self.activation(out)
+        # (b, sq, 4d) -> (b, sq, 4d)
         out = self.dropout(out)
+        # (b, sq, 4d) * (4d, d) -> (b, sq, d)
         out = self.fc2(out)
         return out
