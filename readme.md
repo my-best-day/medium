@@ -2,14 +2,12 @@
 
 ### Based on and inspired by Andrej Karpathy's [nanoGPT](https://github.com/karpathy/nanoGPT) and [miniGPT](https://github.com/karpathy/minGPT)
 
-I built this project to learn the anatomy and implementation of the transformer architecture by hands-on practice. This includes exploring pre-training and fine-tuning training routines. 
+I created this project to learn the anatomy and implementation of the transformer architecture by hands-on practice. I implemented both BERT and GPT. I pre-trained BERT and fine-tuned it on a binary classification tasks - sentiment analysis with the SST-2 dataset, and linguistic acceptability with the CoLA dataset. I pre-trained GPT and learned that it's a multiple order of magnitude bigger task than pre-training BERT. 
 
-I started working on BERT and I'm now adding GPT. GPT the model, and its pre-training are already here. The next steps involve improving support for both models and adding fine-tuning for GPT. 
+In addition to learning about the models' structure, I became familiar with training loops, learning rate scheduling, the nuances of weight initialization, resuming from checkpoints, synchronization across ranks, distributed data parallel training, weight decay, dropout, micro-steps and gradient accumulation, dataset creation and caching, and a few more ingredients of the modeling toolkit (such as mixed precision training, bfloat16, float16, and gradient scaling). 
 
 The readme update is pending, as I need to cover GPT, recent additions, and major re-factoring.   
 See [todo.txt](./todo.txt) for the plan ahead.   
-
-
 
 ### Let's start with some results:
 #### Pre-Training using MLM and the WikiText-103 dataset
@@ -71,7 +69,8 @@ The model achieved a binary classification accuracy of approximately **87%** whe
 
 
 ### Hyperparameters 
-The above results were generated using the following setups:
+
+The above results were generated using the following set ups. The code has gone through many changes since then, including changes to the existing config argument and the addition of new ones. 
 
 ##### MLM Pre-Training Parameters
 ```
