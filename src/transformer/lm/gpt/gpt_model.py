@@ -16,7 +16,9 @@ class GptModel(torch.nn.Module):
         self.gen_lm = GenerativeModel(gpt.d_model, vocab_size)
 
     def forward(self, x):
+        # (b, seq_len) -> (b, seq_len, d_model)
         x = self.gpt(x)
+        # (b, seq_len, d_model) -> (b, seq_len, vocab_size)
         return self.gen_lm(x)
 
     @property
