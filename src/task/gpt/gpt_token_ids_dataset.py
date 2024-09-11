@@ -1,8 +1,11 @@
+import logging
 import gzip
 import torch
 import msgpack
 from torch.utils.data import Dataset
 from pathlib import Path
+
+logger = logging.getLogger(__name__)
 
 
 class GptTokenIdsDataset(Dataset):
@@ -61,6 +64,7 @@ class GptTokenIdsDataset(Dataset):
                 for tokens in unpacker:
                     token_ids.extend(tokens)
         except (FileNotFoundError, gzip.BadGzipFile) as e:
-            print(f"Error reading token ids from file: {e}")
+            logger.error(f"Error reading token ids from file: {e}")
+            raise e
 
         return token_ids

@@ -81,6 +81,18 @@ class GptTaskHandler(TaskHandler):
             torch.nn.init.zeros_(lm_head.classifier.bias)
 
     def get_dataset(self, epoch, split):
+        from task.gpt.gpt_article_dataset import GptArticleDataset
+        seq_len = self.config.model.seq_len
+        percentage = THC.get_percentage(self.config, split)
+        path_pattern = self.config.train.dataset_pattern
+        content_name = path_pattern.format(split=split, which='content')
+        indexes_name = path_pattern.format(split=split, which='indexes')
+        content_path = self.config.run.datasets_dir / content_name
+        indexes_path = self.config.run.datasets_dir / indexes_name
+        dataset = GptArticleDataset(content_path, indexes_path, seq_len, percentage)
+        return dataset
+
+    def get_dataset_old(self, epoch, split):
         from task.gpt.gpt_token_ids_dataset import GptTokenIdsDataset
         seq_len = self.config.model.seq_len
         percentage = THC.get_percentage(self.config, split)

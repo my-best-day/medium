@@ -77,7 +77,9 @@ class Trainer:
     def train(self):
         timer = Timer()
         losses = []
+        logger.info(">>> >>> Starting training")
         X, Y = self.get_batch('train', True)
+        logger.info(">>> >>> Got batch")
         while self.should_continue_looping(self.config.train.max_iters, self.iters):
             lr = self.adjust_lr()
             if self.should_estimate_loss():
