@@ -81,6 +81,8 @@ class Trainer:
         X, Y = self.get_batch('train', True)
         logger.info(">>> >>> Got batch")
         while self.should_continue_looping(self.config.train.max_iters, self.iters):
+            # 20 iteration with micro-steps of 1, then 20 with micro-steps of 2, repeat
+            self.micro_step_count = 1 + (self.iters // 20) % 2
             lr = self.adjust_lr()
             if self.should_estimate_loss():
                 elapsed = timer.elapsed(restart=False)
@@ -268,6 +270,7 @@ class Trainer:
             f'lr: {lr * 1000:6.4f} e-3',
             f't.loss: {loss_str}',
             f'v.loss: {val_loss:5.2f}',
+            f'micro-steps: {self.micro_step_count}',
         ]
         if val_accuracy != SKIP_ACCURACY:
             items.append(f'v.acc: {val_accuracy:5.2%}')
@@ -283,16 +286,18 @@ class Trainer:
         if val_accuracy != SKIP_ACCURACY:
             self.writer.add_scalar('val_accuracy', val_accuracy, self.iters)
         self.writer.add_scalar('lr', lr, self.iters)
+        self.writer.add_scalar('micro_steps', self.micro_step_count, self.iters)
 
     def log_wandb(self, train_loss, val_loss, val_accuracy, lr):
         import wandb
         wandb.log({
+            'step': self.iters,
             'train_loss': train_loss,
             'val_loss': val_loss,
             'val_accuracy': val_accuracy,
-            'lr': lr},
-            step=self.iters
-        )
+            'lr': lr,
+            'micro_steps': self.micro_step_count,
+        })
 
     def save_checkpoint(self, iter: int, val_loss: float, lr: float):
         # skip checkpoint if this is not the main process
