@@ -81,8 +81,9 @@ class Trainer:
         X, Y = self.get_batch('train', True)
         logger.info(">>> >>> Got batch")
         while self.should_continue_looping(self.config.train.max_iters, self.iters):
-            # 20 iteration with micro-steps of 1, then 20 with micro-steps of 2, repeat
-            self.micro_step_count = 1 + (self.iters // 20) % 2
+            # N iteration with micro-steps of 1, then N with micro-steps of 2, repeat
+            flip_every = self.config.train.val_interval
+            self.micro_step_count = 1 + (self.iters // flip_every) % 2
             lr = self.adjust_lr()
             if self.should_estimate_loss():
                 elapsed = timer.elapsed(restart=False)
