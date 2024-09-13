@@ -82,16 +82,16 @@ class Trainer:
         X, Y = self.get_batch('train', True)
         logger.info(">>> >>> Got batch")
         while self.should_continue_looping(self.config.train.max_iters, self.iters):
+
             self.set_micro_step_count()
             micro_step_adj = self.get_micro_step_lr_adjustment()
             lr = self.adjust_lr(micro_step_adj)
+
             if self.should_estimate_loss():
                 elapsed = timer.elapsed(restart=False)
                 self.estimate_loss_and_log_progress(elapsed, losses, lr)
                 losses = []
-            elif self.iters % 10 == 0 and len(losses) > 0:
-                train_loss = self.average_synced_up_loss(losses)
-                self.log_progress(timer.elapsed(restart=False), train_loss, None, SKIP_ACCURACY, lr)
+
             # enter micro-step
             accumulated_loss = 0.0
             for micro_step in range(self.micro_step_count):
@@ -111,39 +111,22 @@ class Trainer:
     def set_micro_step_count(self):
         """
         Current implementation sets micro-step counts to 1 for two cycles
-        then to 2 for one cycle. We use val_interval to determine the cycle length.
-        (we estimate the val loss every val_interval iterations)
+        then to 2 for one cycle.
         """
-        flip_every = self.config.train.val_interval
-        self.micro_step_count = 1 + (self.iters // flip_every) % 3
+        # we got from 1 to 1 to 2 every 4500 iterations
+        cycle_len = 1500
+        one_one_two = self.s_one_one_two(cycle_len, self.iters)
+        self.micro_step_count = one_one_two
 
-    def get_micro_step_lr_adjustment(self):
+    @staticmethod
+    def s_one_one_two(cycle_len, i):
         """
-        micro-step-count = 1 => adjustment = 0.05
-        micro-step-count = 2 => adjustment = -0.15
-        the adjustment shrinks by decreasing amount as micro-step-count increases
-        micro-step-count <= 8 => adjustment = -0.15 ** (2 / micro-step-count)
-
-        we take this adjustment and use it to adjust a ramp function that affects the learning
-        rate a long one cycle (val_interval iterations).
-        The adjustment starts with zero, increase linearly to the adjustment value
-        in the middle of the cycle, then decrease linearly back to zero.
-
-        The goal is: decrease the learning rate the the micro-step count increases, and
-        do this is gradually, using the ramp function, to avoid sudden change to the
-        learning rate.
+        2 cycles of 1, then 1 cycle of 2
         """
-        micro_step_count = self.micro_step_count
-        adjustment_unit = 0.15  # percent
-        if micro_step_count == 1:
-            lr_adjustment = adjustment_unit / 3
-        elif micro_step_count == 2:
-            lr_adjustment = -adjustment_unit
-        elif micro_step_count <= 8:
-            lr_adjustment = -adjustment_unit ** (2 / micro_step_count)
-        else:
-            raise ValueError(f"Invalid micro_step_count: {micro_step_count}")
-        return lr_adjustment
+        cycle_pos = i // cycle_len
+        zero_zero_one = int(((cycle_pos % 3) / 3 + 0.5))
+        one_one_two = 1 + zero_zero_one
+        return one_one_two
 
     @torch.no_grad()
     def test(self):
@@ -165,8 +148,8 @@ class Trainer:
         return result
 
     def should_estimate_loss(self):
-        iters = self.iters - self.start_iter
-        result = iters % self.config.train.val_interval == 0 and iters > 0
+        rel_iters = self.iters - self.start_iter
+        result = self.iters % self.config.train.val_interval == 0 and rel_iters > 0
         return result
 
     def adjust_lr(self, micro_step_adj):
@@ -210,19 +193,33 @@ class Trainer:
         lr = (1 + adj) * lr
         return lr
 
-    def get_micro_step_adjusted_lr_adjustment(self, lr):
-        amount = 0.15 * lr
-        adjustment = self.get_cyclical_lr_adjustment(amount)
-        if self.micro_step_count == 1:
-            # standard
-            pass
-        elif self.micro_step_count == 2:
-            adjustment = - adjustment
-        elif self.micro_step_count <= 8:
-            adjustment = - adjustment
+    def get_micro_step_lr_adjustment(self):
+        """
+        micro-step-count = 1 => adjustment = 0.05
+        micro-step-count = 2 => adjustment = -0.15
+        the adjustment shrinks by decreasing amount as micro-step-count increases
+        micro-step-count <= 8 => adjustment = -0.15 ** (2 / micro-step-count)
+
+        we take this adjustment and use it to adjust a ramp function that affects the learning
+        rate a long one cycle (val_interval iterations).
+        The adjustment starts with zero, increase linearly to the adjustment value
+        in the middle of the cycle, then decrease linearly back to zero.
+
+        The goal is: decrease the learning rate the the micro-step count increases, and
+        do this is gradually, using the ramp function, to avoid sudden change to the
+        learning rate.
+        """
+        micro_step_count = self.micro_step_count
+        adjustment_unit = 0.09  # 9% percent
+        if micro_step_count == 1:
+            lr_adjustment = adjustment_unit / 3
+        elif micro_step_count == 2:
+            lr_adjustment = -adjustment_unit
+        elif micro_step_count <= 8:
+            lr_adjustment = -adjustment_unit ** (2 / micro_step_count)
         else:
-            raise ValueError(f"Invalid micro_step_count: {self.micro_step_count}")
-        return adjustment
+            raise ValueError(f"Invalid micro_step_count: {micro_step_count}")
+        return lr_adjustment
 
     def get_cyclical_lr_adjustment(self, multiplier=1.0):
         cycle_len = self.config.train.val_interval
