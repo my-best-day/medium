@@ -11,7 +11,7 @@ from utils.timer import Timer
 logger = logging.getLogger(__name__)
 
 SKIP_ACCURACY = -1
-
+CYCLE_LEN = 1500
 
 class Trainer:
     def __init__(self, config, model, optimizer, task_handler):
@@ -114,8 +114,7 @@ class Trainer:
         then to 2 for one cycle.
         """
         # we got from 1 to 1 to 2 every 4500 iterations
-        cycle_len = 1500
-        one_one_two = self.s_one_one_two(cycle_len, self.iters)
+        one_one_two = self.s_one_one_two(CYCLE_LEN, self.iters)
         self.micro_step_count = one_one_two
 
     @staticmethod
@@ -222,9 +221,8 @@ class Trainer:
         return lr_adjustment
 
     def get_cyclical_lr_adjustment(self, multiplier=1.0):
-        cycle_len = self.config.train.val_interval
         iters = self.iters
-        return self.cyclical_ramp(cycle_len, multiplier, iters)
+        return self.cyclical_ramp(CYCLE_LEN, multiplier, iters)
 
     @staticmethod
     def cyclical_ramp(cycle_len, multiplier, iters):
