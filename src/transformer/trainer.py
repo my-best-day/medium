@@ -122,7 +122,7 @@ class Trainer:
         micro-step-count = 1 => adjustment = 0.05
         micro-step-count = 2 => adjustment = -0.15
         the adjustment shrinks by decreasing amount as micro-step-count increases
-        micro-step-count <= 8 => adjustment = -0.15 ^ (2 / micro-step-count)
+        micro-step-count <= 8 => adjustment = -0.15 ** (2 / micro-step-count)
 
         we take this adjustment and use it to adjust a ramp function that affects the learning
         rate a long one cycle (val_interval iterations).
@@ -140,7 +140,7 @@ class Trainer:
         elif micro_step_count == 2:
             lr_adjustment = -adjustment_unit
         elif micro_step_count <= 8:
-            lr_adjustment = -adjustment_unit ^ (2 / micro_step_count)
+            lr_adjustment = -adjustment_unit ** (2 / micro_step_count)
         else:
             raise ValueError(f"Invalid micro_step_count: {micro_step_count}")
         return lr_adjustment
