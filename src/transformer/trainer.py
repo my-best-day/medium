@@ -89,7 +89,7 @@ class Trainer:
                 elapsed = timer.elapsed(restart=False)
                 self.estimate_loss_and_log_progress(elapsed, losses, lr)
                 losses = []
-            elif self.iters % 10 == 0:
+            elif self.iters % 10 == 0 and len(losses) > 0:
                 train_loss = self.average_synced_up_loss(losses)
                 self.log_progress(timer.elapsed(restart=False), train_loss, None, SKIP_ACCURACY, lr)
             # enter micro-step
