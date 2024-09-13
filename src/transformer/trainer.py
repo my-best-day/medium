@@ -1,4 +1,5 @@
 import time
+import math
 import torch
 import logging
 from collections import deque
@@ -81,14 +82,16 @@ class Trainer:
         X, Y = self.get_batch('train', True)
         logger.info(">>> >>> Got batch")
         while self.should_continue_looping(self.config.train.max_iters, self.iters):
-            # N iteration with micro-steps of 1, then N with micro-steps of 2, repeat
-            flip_every = self.config.train.val_interval
-            self.micro_step_count = 1 + (self.iters // flip_every) % 2
-            lr = self.adjust_lr()
+            self.set_micro_step_count()
+            micro_step_adj = self.get_micro_step_lr_adjustment()
+            lr = self.adjust_lr(micro_step_adj)
             if self.should_estimate_loss():
                 elapsed = timer.elapsed(restart=False)
                 self.estimate_loss_and_log_progress(elapsed, losses, lr)
                 losses = []
+            elif self.iters % 10 == 0:
+                train_loss = self.average_synced_up_loss(losses)
+                self.log_progress(timer.elapsed(restart=False), train_loss, None, SKIP_ACCURACY, lr)
             # enter micro-step
             accumulated_loss = 0.0
             for micro_step in range(self.micro_step_count):
@@ -104,6 +107,43 @@ class Trainer:
             self.step()
             self.optimizer.zero_grad()
             self.iters += 1
+
+    def set_micro_step_count(self):
+        """
+        Current implementation sets micro-step counts to 1 for two cycles
+        then to 2 for one cycle. We use val_interval to determine the cycle length.
+        (we estimate the val loss every val_interval iterations)
+        """
+        flip_every = self.config.train.val_interval
+        self.micro_step_count = 1 + (self.iters // flip_every) % 3
+
+    def get_micro_step_lr_adjustment(self):
+        """
+        micro-step-count = 1 => adjustment = 0.05
+        micro-step-count = 2 => adjustment = -0.15
+        the adjustment shrinks by decreasing amount as micro-step-count increases
+        micro-step-count <= 8 => adjustment = -0.15 ^ (2 / micro-step-count)
+
+        we take this adjustment and use it to adjust a ramp function that affects the learning
+        rate a long one cycle (val_interval iterations).
+        The adjustment starts with zero, increase linearly to the adjustment value
+        in the middle of the cycle, then decrease linearly back to zero.
+
+        The goal is: decrease the learning rate the the micro-step count increases, and
+        do this is gradually, using the ramp function, to avoid sudden change to the
+        learning rate.
+        """
+        micro_step_count = self.micro_step_count
+        adjustment_unit = 0.15  # percent
+        if micro_step_count == 1:
+            lr_adjustment = adjustment_unit / 3
+        elif micro_step_count == 2:
+            lr_adjustment = -adjustment_unit
+        elif micro_step_count <= 8:
+            lr_adjustment = -adjustment_unit ^ (2 / micro_step_count)
+        else:
+            raise ValueError(f"Invalid micro_step_count: {micro_step_count}")
+        return lr_adjustment
 
     @torch.no_grad()
     def test(self):
@@ -129,19 +169,75 @@ class Trainer:
         result = iters % self.config.train.val_interval == 0 and iters > 0
         return result
 
-    def adjust_lr(self):
-        lr = self.get_lr()
+    def adjust_lr(self, micro_step_adj):
+        lr = self.get_lr(micro_step_adj)
         for param_group in self.optimizer.param_groups:
             param_group['lr'] = lr
         return lr
 
-    def get_lr(self):
+    def get_lr(self, micro_step_adj):
         """
         Get the learning rate for the current iteration.
+
+        The learning rate is adjusted in the following steps:
+
+        1. Cosine Annealing with Warmup:
+            - The learning rate starts from 0 and increases linearly to the base learning rate
+              during the warmup period.
+            - After the warmup period, it follows a cosine annealing schedule until
+              `lr_decay_iters`.
+
+        2. Warmup from Checkpoint:
+            - If resuming from a checkpoint, the learning rate is gradually increased from the
+              checkpoint's learning rate to the current learning rate over `resume_warmup_iters`.
+
+        3. Learning Rate Adjustment:
+            - The adjustments are applied in two ways:
+                3.a. Ramp Function:
+                    - Along the learning rate cycle (`val_interval`), the learning rate is
+                      gradually nudged up and then gradually down.
+                3.b. Micro-Step Count Adjustment:
+                    - The adjustment of the ramp function is determined by the micro-step count:
+                    - Micro-step count 1: slight adjustment upwards (up to 5%).
+                    - Micro-step count 2: adjustment downwards (up to 15%).
+                    - Micro-step counts 3 to 8: adjustment downwards with a gently increasing
+                      amount.
         """
         lr = self.get_lr_cosine_annealing_with_warmup()
         lr = self.get_smoothed_lr_after_resume(lr)
+        # introduces a ramp adjustment sensitive to the micro-step count
+        adj = self.get_cyclical_lr_adjustment(micro_step_adj)
+        lr = (1 + adj) * lr
         return lr
+
+    def get_micro_step_adjusted_lr_adjustment(self, lr):
+        amount = 0.15 * lr
+        adjustment = self.get_cyclical_lr_adjustment(amount)
+        if self.micro_step_count == 1:
+            # standard
+            pass
+        elif self.micro_step_count == 2:
+            adjustment = - adjustment
+        elif self.micro_step_count <= 8:
+            adjustment = - adjustment
+        else:
+            raise ValueError(f"Invalid micro_step_count: {self.micro_step_count}")
+        return adjustment
+
+    def get_cyclical_lr_adjustment(self, multiplier=1.0):
+        cycle_len = self.config.train.val_interval
+        iters = self.iters
+        return self.cyclical_ramp(cycle_len, multiplier, iters)
+
+    @staticmethod
+    def cyclical_ramp(cycle_len, multiplier, iters):
+        """
+        Adjust the learning rate for the current micro-step.
+        """
+        position = iters % cycle_len
+        ramp = 1 - abs(2 * position / cycle_len - 1)
+        result = multiplier * ramp
+        return result
 
     def get_smoothed_lr_after_resume(self, lr):
         """
@@ -227,16 +323,20 @@ class Trainer:
         self.scaler.step(self.optimizer)
         self.scaler.update()
 
-    def estimate_loss_and_log_progress(self, elapsed, train_losses, lr):
+    def estimate_loss_and_log_progress(self, elapsed, train_losses, lr, estimate_loss=True):
         train_loss = self.average_synced_up_loss(train_losses)
 
-        val_loss, val_accuracy = self.estimate_loss('val', True)
-        self.last_n_val_losses.append(val_loss)
-        avg_val_loss = sum(self.last_n_val_losses) / len(self.last_n_val_losses)
+        if estimate_loss:
+            val_loss, val_accuracy = self.estimate_loss('val', True)
+            self.last_n_val_losses.append(val_loss)
+            avg_val_loss = sum(self.last_n_val_losses) / len(self.last_n_val_losses)
+        else:
+            val_loss = None
+            val_accuracy = SKIP_ACCURACY
 
-        if self.config.run.is_primary:
-            self.log_progress(elapsed, train_loss, val_loss, val_accuracy, lr)
+        self.log_progress(elapsed, train_loss, val_loss, val_accuracy, lr)
 
+        if self.config.run.is_primary and estimate_loss:
             if self.should_save_checkpoint(avg_val_loss):
                 self.save_checkpoint(self.iters, avg_val_loss, lr)
                 self.best_val_loss = avg_val_loss
@@ -253,6 +353,9 @@ class Trainer:
         return True
 
     def log_progress(self, elapsed, train_loss, val_loss, val_accuracy, lr):
+        if not self.config.run.is_primary:
+            return
+
         self.log_tensorboard(train_loss, val_loss, val_accuracy, lr)
 
         if self.config.run.wandb:
@@ -261,16 +364,18 @@ class Trainer:
         num_digits = len(f'{self.config.train.max_iters:,}')
         per_iteration = (elapsed / self.iters) if self.iters > 0 else 0.5
         remaining = per_iteration * (self.config.train.max_iters - self.iters)
-        loss_str = 'None ' if train_loss is None else f'{train_loss:5.2f}'
+        t_loss_str = 'None ' if train_loss is None else f'{train_loss:5.2f}'
+        v_loss_str = 'None ' if val_loss is None else f'{val_loss:5.2f}'
+        relative_iters = self.iters - self.start_iter
         items = [
             f'{self.iters / self.config.train.max_iters:4.0%}',
-            f'{self.iters:>{num_digits},}/{self.config.train.max_iters:,}',
-            f'e: {time.strftime("%H:%M:%S", time.gmtime(elapsed))}',
-            f'r: {time.strftime("%H:%M:%S", time.gmtime(remaining))}',
+            f'{self.iters:>{num_digits},}/{self.config.train.max_iters:,} ({relative_iters:,})',
+            f'e: {time.strftime("%H:%M", time.gmtime(elapsed))}',
+            f'r: {time.strftime("%H:%M", time.gmtime(remaining))}',
             f'{time.strftime("%M:%S", time.gmtime(per_iteration * 1000.0))} /Kit',
             f'lr: {lr * 1000:6.4f} e-3',
-            f't.loss: {loss_str}',
-            f'v.loss: {val_loss:5.2f}',
+            f't.loss: {t_loss_str}',
+            f'v.loss: {v_loss_str}',
             f'micro-steps: {self.micro_step_count}',
         ]
         if val_accuracy != SKIP_ACCURACY:
@@ -283,7 +388,8 @@ class Trainer:
     def log_tensorboard(self, train_loss, val_loss, val_accuracy, lr):
         if train_loss is not None:
             self.writer.add_scalar('train_loss', train_loss, self.iters)
-        self.writer.add_scalar('val_loss', val_loss, self.iters)
+        if val_loss is not None:
+            self.writer.add_scalar('val_loss', val_loss, self.iters)
         if val_accuracy != SKIP_ACCURACY:
             self.writer.add_scalar('val_accuracy', val_accuracy, self.iters)
         self.writer.add_scalar('lr', lr, self.iters)
