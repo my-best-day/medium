@@ -1,5 +1,4 @@
 import time
-import math
 import torch
 import logging
 from collections import deque
@@ -11,7 +10,8 @@ from utils.timer import Timer
 logger = logging.getLogger(__name__)
 
 SKIP_ACCURACY = -1
-CYCLE_LEN = 1500
+CYCLE_LEN = 3000
+
 
 class Trainer:
     def __init__(self, config, model, optimizer, task_handler):
@@ -209,9 +209,9 @@ class Trainer:
         learning rate.
         """
         micro_step_count = self.micro_step_count
-        adjustment_unit = 0.09  # 9% percent
+        adjustment_unit = 0.03  # 3% percent
         if micro_step_count == 1:
-            lr_adjustment = adjustment_unit / 3
+            lr_adjustment = adjustment_unit
         elif micro_step_count == 2:
             lr_adjustment = -adjustment_unit
         elif micro_step_count <= 8:
