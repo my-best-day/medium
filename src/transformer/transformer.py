@@ -19,6 +19,9 @@ class Transformer(torch.nn.Module):
         :param n_layers: numbers of Transformer blocks(layers)
         :param attn_heads: number of attention heads
         :param dropout: dropout rate
+        :param seq_len: max sequence length
+        :param is_gpt: flag to use GPT or BERT
+        :param use_flash: flag to use flash attention
         """
         logging.info("MODEL: vocab_size: %s, d_model: %s, n_layers: %s, heads: %s, dropout: %s",
                      vocab_size, d_model, n_layers, heads, dropout)

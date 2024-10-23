@@ -6,7 +6,6 @@ from .multi_headed_attention import MultiHeadedAttention
 
 class EncoderLayer(torch.nn.Module):
     """Encoder layer of a Transformer model."""
-    # def __init__(self, d_model=768, heads=12, feed_forward_hidden=768 * 4, dropout=0.1):
     def __init__(self, d_model, heads, feed_forward_hidden, dropout, max_len, is_gpt, use_flash):
         super(EncoderLayer, self).__init__()
         self.layernorm1 = torch.nn.LayerNorm(d_model)

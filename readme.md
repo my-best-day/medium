@@ -1,268 +1,80 @@
-# BERT and GPT Models - Pre-Training and Fine-Tuning
+# BERT and GPT Implementation
 
-### Based on and inspired by Andrej Karpathy's [nanoGPT](https://github.com/karpathy/nanoGPT) and [miniGPT](https://github.com/karpathy/minGPT)
+A PyTorch implementation of BERT and GPT models with configurable pre-training and fine-tuning capabilities. This project demonstrates the architectural similarities and differences between these two transformer-based models.
 
-I created this project to learn the anatomy and implementation of the transformer architecture by hands-on practice. I implemented both BERT and GPT. I pre-trained BERT and fine-tuned it on a binary classification tasks - sentiment analysis with the SST-2 dataset, and linguistic acceptability with the CoLA dataset. I pre-trained GPT and learned that it's a multiple order of magnitude bigger task than pre-training BERT. 
+## Goal and Motivation
 
-In addition to learning about the models' structure, I became familiar with training loops, learning rate scheduling, the nuances of weight initialization, resuming from checkpoints, synchronization across ranks, distributed data parallel training, weight decay, dropout, micro-steps and gradient accumulation, dataset creation and caching, and a few more ingredients of the modeling toolkit (such as mixed precision training, bfloat16, float16, and gradient scaling). 
+The primary goal of this project is to provide a deep, hands-on understanding of transformer-based language models, specifically BERT and GPT. By implementing these models from scratch, we aim to:
 
-The readme update is pending, as I need to cover GPT, recent additions, and major re-factoring.   
-See [todo.txt](./todo.txt) for the plan ahead.   
+1. Explore the architectural nuances between bidirectional (BERT) and unidirectional (GPT) attention mechanisms
+2. Demonstrate the flexibility of transformer architectures for various NLP tasks
+3. Provide a clear, modular codebase for educational and research purposes
+4. Showcase modern PyTorch optimizations and training techniques
 
-### Let's start with some results:
-#### Pre-Training using MLM and the WikiText-103 dataset
-(Fine-Tuning result [below](#fine-tuning-result))
+This implementation is inspired by and builds upon the work of Andrej Karpathy, particularly his [nanoGPT](https://github.com/karpathy/nanoGPT) and [minGPT](https://github.com/karpathy/minGPT) projects. While drawing inspiration from these projects, this implementation extends the concepts to include BERT and introduces additional optimizations and training scenarios.
+
+## Key Features
+
+- Unified implementation of BERT and GPT models
+- Configurable model architecture (layers, heads, embedding dimensions)
+- Support for multiple training scenarios:
+  - BERT: Masked Language Modeling (MLM), Classification (SST-2, CoLA)
+  - GPT: Autoregressive language modeling
+- Distributed training support with PyTorch Distributed Data Parallel (DDP)
+- Hardware optimizations: Flash Attention, Fused AdamW, Asynchronous data transfer
+- Mixed precision training (FP32, FP16, BF16)
+- Gradient accumulation for memory-efficient training
+- Comprehensive logging and validation pipeline
+
+## Implementation Details
+
+### Model Architecture
+
+Both BERT and GPT models share core transformer code, implemented in `src/transformer/transformer.py`. The key difference lies in their attention mechanisms:
+
+- BERT: Bidirectional attention (no masking)
+- GPT: Unidirectional attention (causal masking)
+
+The models follow a topology similar to GPT-2, with modernizations such as:
+
+- Pre-layer normalization
+- Flash attention implementation
+- Model sizes ranging from 45M to 90M parameters
+
+### Training Framework
+
+The training framework (`src/transformer/trainer.py`) supports various scenarios and optimizations:
+
+- Configurable learning rate scheduling
+- Checkpoint management for training continuation and fine-tuning
+- Efficient dataset creation, pre-caching, and loading utilities
+
+## Performance Results
+
+### BERT Pre-Training (MLM)
 
 ![Validation accuracy approaches 60%!](./etc/assets/MLM_val_accuracy.png)
 
-The model achieved MLM accuracy **exceeding 60%** after pre-training from scratch on the WikiText-103 dataset. This is considered a good result. 
 
-Here is a cherry-picked example. The first block shows the predictions inside /slashes/. The second block is the original text.
+The BERT model achieved >60% MLM accuracy after pre-training from scratch on WikiText-103.
 
----
-
-he fire fighters 
-<span style="background-color: lightgreen;">**/./**</span> 
-after seeing how upset susan is about the school , ben confesses 
-<span style="background-color: lightgreen;">**/to/**</span> 
-<span style="background-color: orange;">~~/to/~~</span> the fire . 
-<span style="background-color: orange;">~~/she/~~</span> later learns that the school has 
-<span style="background-color: lightgreen;">**/somehow/**</span> saved . reception 
-<span style="background-color: lightgreen;">**/acc/**</span> 
-<span style="background-color: lightgreen;">**/##ola/**</span> des woodburne has earned various award nominations for her role as susan . in 200 
-<span style="background-color: orange;">~~/##7/~~</span> , she 
-<span style="background-color: lightgreen;">**/was/**</span> /nominated/ for best female performance in a soap from 
-<span style="background-color: lightgreen;">**/the/**</span> rose d 
-<span style="background-color: lightgreen;">**/'/**</span> or awards . at the 2007 inside soap awards , wood 
-<span style="background-color: lightgreen;">**/##burn/**</span>e was nominated 
-<span style="background-color: lightgreen;">**/for/**</span> best actress , best couple with alan fletcher and best storyline for susan 
-<span style="background-color: lightgreen;">**/and/**</span> karl 
-<span style="background-color: lightgreen;">**/'/**</span> s wedding . t
-
----
-
-he fire fighters 
-<span style="background-color: lightgreen;">**.**</span> after seeing how upset susan is about the school , ben confesses 
-<span style="background-color: lightgreen;">**to**</span> 
-<span style="background-color: orange;">~~starting~~</span> the fire . 
-<span style="background-color: orange;">~~susan~~</span> later learns that the school has <span style="background-color: lightgreen;">somehow</span> saved . reception 
-<span style="background-color: lightgreen;">**acc**</span>
-<span style="background-color: lightgreen;">**ola**</span> des woodburne has earned various award nominations for her role as susan . in 200
-<<span style="background-color: orange;">~~5~~</span> , she 
-<span style="background-color: lightgreen;">**was**</span> nominated for best female performance in a soap from 
-<span style="background-color: lightgreen;">**the**</span> rose d 
-<span style="background-color: lightgreen;">**'**</span> or awards . at the 2007 inside soap awards , wood
-<span style="background-color: lightgreen;">**burne**</span> was nominated 
-<span style="background-color: lightgreen;">**for**</span> best actress , best couple with alan fletcher and best storyline for susan 
-<span style="background-color: lightgreen;">**and**</span> karl 
-<span style="background-color: lightgreen;">**'**</span> s wedding . t
-
----
-
-In this carefully selected example the model guessed 13 out of the 15 masked tokens, an accuracy of 87%. 
-
-#### Fine-Tuning Using a Binary Classifier and the SST-2 Dataset<a id="fine-tuning-result"></a>
+### SST-2 Fine-Tuning
 
 ![SST-2 Fine tuning accuracy reaches ~87%](./etc/assets/sst2_fine_tuning.png)  
 
-The model achieved a binary classification accuracy of approximately **87%** when fine-tuned on the SST-2 dataset. This is a solid result for a model of this size, pre-trained on a relatively modest dataset, WikiText-103, with a constrained budget. While the result is not extraordinary-after all, this implementation follows established techniques rather than introducing novel innovations-it demonstrates the robustness of the implementation, including  model construction, dataset preparation, training routines, hyperparameter tuning.
+The model achieved ~87% binary classification accuracy on the SST-2 dataset.
 
+## Setup and Usage
 
-### Hyperparameters 
+1. Clone the repository
+2. Install dependencies: `pip install -r requirements.txt`
+3. Prepare the dataset (see `dataset_preparation.md` for details) (sorry, this is stale)
+4. Configure the model and training parameters in `config.ini`
+5. Run pre-training: `python src/main.py`
+6. For fine-tuning, use a pre-trained checkpoint: `python src/main.py --cp <checkpoint_path>`
 
-The above results were generated using the following set ups. The code has gone through many changes since then, including changes to the existing config argument and the addition of new ones. 
+For detailed configuration options and advanced usage, refer to the `etc/templates/config_template.ini` file.
 
-##### MLM Pre-Training Parameters
-```
-task-type = mlm
-seq-len = 128
-batch-size = 100
-val-interval = 100
-d-model = 768
-heads = 12
-n-layer = 6
-dropout = 0.35
+## License
 
-async-to-device: true
-fused-adamw: true
-compile: true
-
-learning-rate = 1.0e-3
-min-learning-rate = 5e-5
-warmup-iters = 1000
-lr-decay-iters = 45_000
-max-iters = 60_000
-weight-decay = 0.01
-
-case = dickens # TODO: rename
-base-dir = wiki
-# supports round-robin of datasets
-dataset-pattern = train_weke_128_*.msgpack
-val-dataset-pattern = val_weke_128_*.msgpack
-# DDP
-dist-master-addr = 127.0.0.1
-dist-master-port = 12233
-# misc
-max-checkpoints = 1
-wandb = false
-``` 
-
-##### SST-2 Binary Classification Fine-Tuning Parameters 
-```
-task-type = sst2
-seq-len = 128
-batch-size = 64
-val-interval = 200
-d-model = 768
-heads = 12
-n-layer = 6
-dropout = 0.0
-
-async-to-device: true
-fused-adamw: true
-compile: true
-
-learning-rate = 6e-5
-min-learning-rate = 1e-7
-warmup-iters = 300
-lr-decay-iters = 8000
-max-iters = 10000
-weight-decay = 0.02
-
-case = dickens # change to something meaningful
-base-dir = wiki
-# for sst2, the file names are hardcoded in sst2_dataset.py
-# dataset-pattern = train_weke_256_*.msgpack
-# val-dataset-pattern = val_weke_256_*.msgpack
-# DDP
-dist-master-addr = 127.0.0.1
-dist-master-port = 12233
-# misc
-max-checkpoints = 1
-wandb = false
-``` 
-
-Adjust the dataset patterns towards the bottom of the config file to match your datasets.
-
-## Pre-Training the Model
-
-### Dataset Generation
-
-See [here](./dataset_preparation.md) a discussion of two methods of generating precached datasets. 
-
-#### Download Dataset 
-I used WikiText-103 which can be downloaded from [Kaggle](https://www.kaggle.com/datasets/dekomposition/wikitext103).
-
-This dataset is quite large, if you just experimenting, I suggest you chop it up.  
-
-`tail -n 180k ignore/wiki/wiki.train.tokens > ignore/wiki/wiki.train.tokens.180`
-
-#### Generation Scripts
-
-There are two sets of utilities to generate MLM precached datasets. 
-
-#### Text Segmentation
-Text segmentation is [explained here](./dataset_preparation.md#text-segmentation).
-
-Use:  [prepare_mlm_dataset.py](./scripts/prepare_mlm_dataset.py)  
-
-`prepare_mlm_dataset.py [-h] -i INPUT -l LABEL -o OUTPUT -m MAX_LEN -v VOCAB [-s SEED]`
-
-Example:  
-`python prepare_mlm_dataset.py -i wiki.train.tokens -l wiki -o wiki/datasets
-                                -m 128 -v wiki/vocab`
-
-This will generate three files:
-* `wiki/datasets/train_wiki_128_123.msgpack.gz`
-* `wiki/datasets/val_wiki_128_123.msgpack.gz`
-* `wiki/datasets/test_wiki_128_123.msgpack.gz`
-
-128 is sequence length  
-123 is the seed of the random number generator  
-wiki is the label
-
-#### Token Splitting
-
-#### TBD
-
-See:  
-[tokenize_text.py](./scripts/tokenize_text.py), and  
-[prepare_mlm_fixed_len_dataset_from_ids.py](./scripts/prepare_mlm_fixed_len_dataset_from_ids.py).
-
-tokenize_text.py convert the text to a list of token ids.  
-prepare_mlm_fixed_len_dataset_from_ids.py uses the output of tokenize_text to create samples by token splitting.
-
-### How to run Pre-Training
-pip install -r requirements.txt
-
-```sh
-mkdir wiki wiki/input wiki/vocab wiki/datasets wiki/runs
-```
-
-#### Download a vocab.txt
-
-For example, download it from [Hugging Face](https://huggingface.co/google-bert/bert-base-uncased/tree/main), or find it under [etc/vocab/vocab.txt](./etc/vocab/vocab.txt). I experimented with both. In my experience, training runs faster, consumes less memory, and yield better results with the smaller vocabulary.  
-
-You want to copy it to `<base-dir>/vocab`
-
-#### Install and adjust the config file
-
-`cp etc/templates/config_template.ini config.ini`
-
-if you are running on a machine without gpu/cuda, see `local_config_template.ini` for more modest settings.
-
-if you're using `local_config.ini`, edit that file, otherwise edit `config.ini`
-
-`seq-len` needs to match the max len of your dataset  
-`batch-size` needs to fit the memory of your GPU  
-`case = dickens` for now, will be changed to mlm later  
-`base-dir = wiki`  
-
-start the training:  
-```sh
-python src/main.py
-```
-
-if you're lucky and have multiple gpus you may use:  
-```sh
-python src/main.py --ddp --nproc 2
-```  
-adjust `nproc` to the number of GPUs available.
-
-### Fine-Tuning 
-
-Download and copy the dataset to `<base-dir>/datasets`, for example, copy 
-`{train|validation|test}-00000-of-00001.parquet` files from the SST-2 dataset into the datasets directory.
-
-See settings in [etc/templates/config_sst2.ini](./etc/templates/config_sst2.ini) for the relevant values to be used for fine-tuning. You config file still needs to be named config.ini.
-
-You need to start from a checkpoint created during the pre-training to begin fine-turning:
-
-For example:   
-
-`python src/main --cp wiki/runs/run0/checkpoints/checkpoint.pt`
-
-DDP is not supported for the fine-tuning (which requires far fewer resources anyway.)
-
-
-### Your directory structure should look something like:
-```
-<project-base>  
-scripts...   
-src...  
-wiki
-  - vocab
-    - vocab.txt  // source to be determined...
-  - datasets   
-    // the files generated by prepare_mlm_dataset.py described above 
-    - train_data_xyz.msgpack.gz
-    - val_data_xyz.msgpack.gz
-    - test_data_xyz.msgpack.gz
-  - runs
-    - run0    // these directories are created during training
-      - logs
-        - log.txt
-        - events log file
-      - checkpoints
-         checkpoint.pt
-  ```
+This project is licensed under the MIT License. See the [LICENSE](LICENSE) file for details.
